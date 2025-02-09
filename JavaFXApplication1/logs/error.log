@@ -1,0 +1,6 @@
+[2025-02-09T18:51:34.526288483] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
+[2025-02-09T18:56:34.497355589] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
+[2025-02-09T18:58:09.225114371] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
+[2025-02-09T19:01:34.480593284] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
+[2025-02-09T19:03:09.199310947] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
+[2025-02-09T19:06:34.46506706] [ERROR] [null] Database synchronisation failed: MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.
