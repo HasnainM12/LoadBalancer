@@ -6,7 +6,7 @@ import java.sql.SQLException;
 
 public class DBConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:comp20081.db";
-    private static final String MYSQL_URL = "jdbc:mysql://localhost:3306/comp20081";
+    private static final String MYSQL_URL = "jdbc:mysql://comp20081-mysql:3307/comp20081?allowPublicKeyRetrieval=true&useSSL=false";
     private static final String MYSQL_USER = System.getenv("MYSQL_USER");
     private static final String MYSQL_PASSWORD = System.getenv("MYSQL_PASSWORD");
 

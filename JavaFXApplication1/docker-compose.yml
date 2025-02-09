@@ -58,25 +58,25 @@ services:
    networks:
      - comp20081_network
 
- mysql:
-   container_name: comp20081-mysql
-   image: mysql:8.0
-   environment:
-     MYSQL_ROOT_PASSWORD: root
-     MYSQL_DATABASE: comp20081
-     MYSQL_USER: user
-     MYSQL_PASSWORD: password
-   ports:
-     - "3307:3306"
-   volumes:
-     - mysql_data:/var/lib/mysql
-   networks:
-     - comp20081_network
+mysql:
+    container_name: comp20081-mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: comp20081
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    command: --init-file /docker-entrypoint-initdb.d/init.sql
+    networks:
+      - comp20081_network
 
-networks:
- comp20081_network:
-   driver: bridge
 
+      
 volumes:
  main_data:
  files1_data:
