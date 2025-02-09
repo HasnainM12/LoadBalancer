@@ -9,3 +9,10 @@
 [2025-02-09T18:15:24.5926861] [AUDIT] [null] New session started for user: Hasnain
 [2025-02-09T18:24:18.5260049] [AUDIT] [null] Login attempt for user: Hasnain
 [2025-02-09T18:24:18.5360076] [AUDIT] [null] New session started for user: Hasnain
+[2025-02-09T18:55:46.9601237] [AUDIT] [null] Login attempt for user: Hasnain
+[2025-02-09T18:55:46.9722141] [AUDIT] [null] New session started for user: Hasnain
+[2025-02-09T18:56:00.6493528] [AUDIT] [Hasnain] User Hasnain initiated upload of file: 0001-004.png
+[2025-02-09T18:56:00.6753514] [AUDIT] [Hasnain] File operation: UPLOAD_START on 0001-004.png - Initiated by Hasnain
+[2025-02-09T18:56:00.6753514] [AUDIT] [Hasnain] File operation: UPLOAD on 0001-004.png - Started
+[2025-02-09T18:56:00.6753514] [AUDIT] [Hasnain] File operation: UPLOAD on 0001-004.png - Completed
+[2025-02-09T18:56:05.6358019] [AUDIT] [Hasnain] Session ended for user: Hasnain
