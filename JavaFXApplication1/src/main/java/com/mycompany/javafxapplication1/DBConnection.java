@@ -14,6 +14,8 @@ public class DBConnection {
         return DriverManager.getConnection(SQLITE_URL);  // ✅ Always for sessions & temp data
     }
 
+    private static boolean tablesInitialized = false;
+
     public static Connection getMySQLConnection() throws SQLException {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
@@ -23,19 +25,26 @@ public class DBConnection {
         
         Connection conn = DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);
         
-        // Initialize database tables in correct order
-        try {
-            // Create Users table first since it's referenced by other tables
-            new UserDB().createUserTable();
-            
-            // Create Files and related tables
-            FileDB fileDB = new FileDB();
-            fileDB.createFileTable();
-            fileDB.createFilePermissionsTable();
-            fileDB.createChunksTable();
-            
-        } catch (ClassNotFoundException e) {
-            throw new SQLException("Error initializing database tables", e);
+        // Initialize tables only once
+        if (!tablesInitialized) {
+            synchronized (DBConnection.class) {
+                if (!tablesInitialized) {
+                    try {
+                        // Use the same connection for all table creation
+                        UserDB userDB = new UserDB();
+                        FileDB fileDB = new FileDB();
+                        
+                        userDB.createUserTable();
+                        fileDB.createFileTable();
+                        fileDB.createFilePermissionsTable();
+                        fileDB.createChunksTable();
+                        
+                        tablesInitialized = true;
+                    } catch (ClassNotFoundException e) {
+                        throw new SQLException("Error initializing database tables", e);
+                    }
+                }
+            }
         }
         
         return conn;
