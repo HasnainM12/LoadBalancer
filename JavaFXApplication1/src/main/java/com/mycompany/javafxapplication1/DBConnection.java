@@ -6,9 +6,9 @@ import java.sql.SQLException;
 
 public class DBConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:comp20081.db";
-    private static final String MYSQL_URL = "jdbc:mysql://comp20081-mysql:3307/comp20081?allowPublicKeyRetrieval=true&useSSL=false";
-    private static final String MYSQL_USER = System.getenv("MYSQL_USER");
-    private static final String MYSQL_PASSWORD = System.getenv("MYSQL_PASSWORD");
+    private static final String MYSQL_URL = "jdbc:mysql://localhost:3307/comp20081?allowPublicKeyRetrieval=true&useSSL=false";
+    private static final String MYSQL_USER = "user";  // Matches docker-compose.yml
+    private static final String MYSQL_PASSWORD = "password";  // Matches docker-compose.yml
 
     public static Connection getSQLiteConnection() throws SQLException {
         return DriverManager.getConnection(SQLITE_URL);  // ✅ Always for sessions & temp data
@@ -26,4 +26,3 @@ public class DBConnection {
         return DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);  // ✅ Always for users & files
     }
 }
-
