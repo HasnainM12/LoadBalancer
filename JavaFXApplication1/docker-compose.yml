@@ -1,64 +1,64 @@
 services:
- main-container:
-   container_name: comp20081-main
-   image: pedrombmachado/ntu_lubuntu:comp20081
-   ports:
-     - "3390:3389"
-     - "2022:22" 
-   volumes:
-     - main_data:/home/ntu-user/NetBeansProjects
-   networks:
-     - comp20081_network
+  main-container:
+    container_name: comp20081-main
+    image: pedrombmachado/ntu_lubuntu:comp20081
+    ports:
+      - "3390:3389"
+      - "2022:22" 
+    volumes:
+      - main_data:/home/ntu-user/NetBeansProjects
+    networks:
+      - comp20081_network
 
- load-balancer:
-   container_name: comp20081-loadbalancer
-   image: pedrombmachado/ntu_lubuntu:comp20081
-   ports:
-     - "4847:22"
-   networks:
-     - comp20081_network
+  load-balancer:
+    container_name: comp20081-loadbalancer
+    image: pedrombmachado/ntu_lubuntu:comp20081
+    ports:
+      - "4847:22"
+    networks:
+      - comp20081_network
 
- file-server1:
-   container_name: comp20081-files1
-   image: pedrombmachado/simple-ssh-container:base
-   ports:
-     - "4848:22"
-   volumes:
-     - files1_data:/storage
-   networks:
-     - comp20081_network
+  file-server1:
+    container_name: comp20081-files1
+    image: pedrombmachado/simple-ssh-container:base
+    ports:
+      - "4848:22"
+    volumes:
+      - files1_data:/storage
+    networks:
+      - comp20081_network
 
- file-server2:
-   container_name: comp20081-files2
-   image: pedrombmachado/simple-ssh-container:base
-   ports:
-     - "4849:22"
-   volumes:
-     - files2_data:/storage  
-   networks:
-     - comp20081_network
+  file-server2:
+    container_name: comp20081-files2
+    image: pedrombmachado/simple-ssh-container:base
+    ports:
+      - "4849:22"
+    volumes:
+      - files2_data:/storage  
+    networks:
+      - comp20081_network
 
- file-server3:
-   container_name: comp20081-files3
-   image: pedrombmachado/simple-ssh-container:base
-   ports:
-     - "4850:22"
-   volumes:
-     - files3_data:/storage
-   networks:
-     - comp20081_network
+  file-server3:
+    container_name: comp20081-files3
+    image: pedrombmachado/simple-ssh-container:base
+    ports:
+      - "4850:22"
+    volumes:
+      - files3_data:/storage
+    networks:
+      - comp20081_network
 
- file-server4:
-   container_name: comp20081-files4
-   image: pedrombmachado/simple-ssh-container:base
-   ports:
-     - "4851:22"
-   volumes:
-     - files4_data:/storage
-   networks:
-     - comp20081_network
+  file-server4:
+    container_name: comp20081-files4
+    image: pedrombmachado/simple-ssh-container:base
+    ports:
+      - "4851:22"
+    volumes:
+      - files4_data:/storage
+    networks:
+      - comp20081_network
 
-mysql:
+  mysql:
     container_name: comp20081-mysql
     image: mysql:8.0
     environment:
@@ -75,12 +75,13 @@ mysql:
     networks:
       - comp20081_network
 
-
-      
 volumes:
- main_data:
- files1_data:
- files2_data:
- files3_data:
- files4_data:
- mysql_data:
+  main_data:
+  files1_data:
+  files2_data:
+  files3_data:
+  files4_data:
+  mysql_data:
+
+networks:
+  comp20081_network:
