@@ -6,7 +6,7 @@ import java.sql.SQLException;
 
 public class DBConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:comp20081.db";
-    private static final String MYSQL_URL = "jdbc:mysql://localhost:3307/comp20081?allowPublicKeyRetrieval=true&useSSL=false";
+    private static final String MYSQL_URL = "jdbc:mysql://mysql:3306/comp20081?allowPublicKeyRetrieval=true&useSSL=false";
     private static final String MYSQL_USER = "user";  // Matches docker-compose.yml
     private static final String MYSQL_PASSWORD = "password";  // Matches docker-compose.yml
 
@@ -20,9 +20,24 @@ public class DBConnection {
         } catch (ClassNotFoundException e) {
             throw new SQLException("MySQL JDBC Driver not found!", e);
         }
-        if (MYSQL_USER == null || MYSQL_PASSWORD == null) {
-            throw new SQLException("MySQL credentials not set. Configure MYSQL_USER and MYSQL_PASSWORD.");
+        
+        Connection conn = DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);
+        
+        // Initialize database tables in correct order
+        try {
+            // Create Users table first since it's referenced by other tables
+            new UserDB().createUserTable();
+            
+            // Create Files and related tables
+            FileDB fileDB = new FileDB();
+            fileDB.createFileTable();
+            fileDB.createFilePermissionsTable();
+            fileDB.createChunksTable();
+            
+        } catch (ClassNotFoundException e) {
+            throw new SQLException("Error initializing database tables", e);
         }
-        return DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);  // ✅ Always for users & files
+        
+        return conn;
     }
 }
