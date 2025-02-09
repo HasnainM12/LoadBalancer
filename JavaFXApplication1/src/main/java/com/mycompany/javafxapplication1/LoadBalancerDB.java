@@ -24,9 +24,6 @@ public class LoadBalancerDB {
     }
 
     public void createStorageContainersTable() {
-        // First drop existing tables to ensure clean slate
-        dropTables();
-        
         String query = "CREATE TABLE IF NOT EXISTS StorageContainers (" +
                 "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                 "name VARCHAR(255) UNIQUE, " +

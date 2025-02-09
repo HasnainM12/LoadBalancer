@@ -33,11 +33,17 @@ public class DBConnection {
                         // Use the same connection for all table creation
                         UserDB userDB = new UserDB();
                         FileDB fileDB = new FileDB();
+                        LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
                         
+                        // Create tables in correct order
                         userDB.createUserTable();
+                        loadBalancerDB.createStorageContainersTable();  // Create storage containers before files
                         fileDB.createFileTable();
                         fileDB.createFilePermissionsTable();
                         fileDB.createChunksTable();
+                        
+                        // Initialize storage containers based on docker-compose services
+                        initializeStorageContainers(loadBalancerDB);
                         
                         tablesInitialized = true;
                     } catch (ClassNotFoundException e) {
@@ -48,5 +54,13 @@ public class DBConnection {
         }
         
         return conn;
+    }
+
+    private static void initializeStorageContainers(LoadBalancerDB loadBalancerDB) {
+        // Initialize storage containers for each file server
+        for (int i = 1; i <= 4; i++) {
+            String containerName = "comp20081-files" + i;
+            loadBalancerDB.addStorageContainer(containerName);
+        }
     }
 }
