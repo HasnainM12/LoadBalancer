@@ -1,91 +1,86 @@
-version: '3.8'
-
 services:
-  comp20081:
-    container_name: comp20081
-    build: .
-    depends_on:
-      - load_balancer
-    networks:
-      - backend
-    environment:
-      MYSQL_USER: root
-      MYSQL_PASSWORD: my-secret-password
-      MYSQL_HOST: mysql
-    volumes:
-      - ./app:/app
-    command: ["java", "-jar", "COMP20081.jar"]
+ main-container:
+   container_name: comp20081-main
+   image: pedrombmachado/ntu_lubuntu:comp20081
+   ports:
+     - "3390:3389"
+     - "2022:22" 
+   volumes:
+     - main_data:/home/ntu-user/NetBeansProjects
+   networks:
+     - comp20081_network
 
-  load_balancer:
-    container_name: load_balancer
-    build: ./load_balancer
-    depends_on:
-      - mysql
-      - file_server1
-      - file_server2
-      - file_server3
-      - file_server4
-    networks:
-      - backend
-    environment:
-      MYSQL_USER: root
-      MYSQL_PASSWORD: my-secret-password
-      MYSQL_HOST: mysql
+ load-balancer:
+   container_name: comp20081-loadbalancer
+   image: pedrombmachado/ntu_lubuntu:comp20081
+   ports:
+     - "4847:22"
+   networks:
+     - comp20081_network
 
-  file_server1:
-    container_name: file_server1
-    build: ./file_server
-    networks:
-      - backend
-    volumes:
-      - file_data1:/data
+ file-server1:
+   container_name: comp20081-files1
+   image: pedrombmachado/simple-ssh-container:base
+   ports:
+     - "4848:22"
+   volumes:
+     - files1_data:/storage
+   networks:
+     - comp20081_network
 
-  file_server2:
-    container_name: file_server2
-    build: ./file_server
-    networks:
-      - backend
-    volumes:
-      - file_data2:/data
+ file-server2:
+   container_name: comp20081-files2
+   image: pedrombmachado/simple-ssh-container:base
+   ports:
+     - "4849:22"
+   volumes:
+     - files2_data:/storage  
+   networks:
+     - comp20081_network
 
-  file_server3:
-    container_name: file_server3
-    build: ./file_server
-    networks:
-      - backend
-    volumes:
-      - file_data3:/data
+ file-server3:
+   container_name: comp20081-files3
+   image: pedrombmachado/simple-ssh-container:base
+   ports:
+     - "4850:22"
+   volumes:
+     - files3_data:/storage
+   networks:
+     - comp20081_network
 
-  file_server4:
-    container_name: file_server4
-    build: ./file_server
-    networks:
-      - backend
-    volumes:
-      - file_data4:/data
+ file-server4:
+   container_name: comp20081-files4
+   image: pedrombmachado/simple-ssh-container:base
+   ports:
+     - "4851:22"
+   volumes:
+     - files4_data:/storage
+   networks:
+     - comp20081_network
 
-  mysql:
-    container_name: mysql
-    image: mysql:8.0
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: my-secret-password
-      MYSQL_DATABASE: comp20081
-      MYSQL_USER: root
-      MYSQL_PASSWORD: my-secret-password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - backend
-
-volumes:
-  mysql_data:
-  file_data1:
-  file_data2:
-  file_data3:
-  file_data4:
+ mysql:
+   container_name: comp20081-mysql
+   image: mysql:8.0
+   environment:
+     MYSQL_ROOT_PASSWORD: root
+     MYSQL_DATABASE: comp20081
+     MYSQL_USER: user
+     MYSQL_PASSWORD: password
+   ports:
+     - "3307:3306"
+   volumes:
+     - mysql_data:/var/lib/mysql
+   networks:
+     - comp20081_network
 
 networks:
-  backend:
+ comp20081_network:
+   driver: bridge
+
+volumes:
+ main_data:
+ files1_data:
+ files2_data:
+ files3_data:
+ files4_data:
+ mysql_data:
