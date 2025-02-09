@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="10" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.mycompany.javafxapplication1.FilePermissionsController">
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+    
+    <Label text="Share with user:" />
+    <ComboBox fx:id="userComboBox" maxWidth="Infinity" />
+    
+    <GridPane hgap="10" vgap="5">
+        <CheckBox fx:id="readPermissionCheckBox" text="Can Read" 
+                  GridPane.columnIndex="0" GridPane.rowIndex="0" />
+        <CheckBox fx:id="writePermissionCheckBox" text="Can Write" 
+                  GridPane.columnIndex="1" GridPane.rowIndex="0" />
+    </GridPane>
+    
+    <HBox spacing="10" alignment="CENTER_RIGHT">
+        <Button fx:id="saveButton" text="Save" />
+        <Button fx:id="cancelButton" text="Cancel" />
+    </HBox>
+</VBox>

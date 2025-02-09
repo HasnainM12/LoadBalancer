@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox spacing="10" xmlns:fx="http://javafx.com/fxml" fx:controller="com.mycompany.javafxapplication1.TerminalController">
+    <padding>
+        <Insets top="10" right="10" bottom="10" left="10"/>
+    </padding>
+    
+    <TextArea fx:id="terminalArea" VBox.vgrow="ALWAYS" 
+              style="-fx-control-inner-background: black; -fx-text-fill: white; -fx-font-family: 'Courier New';" />
+</VBox>

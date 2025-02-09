@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox alignment="CENTER" spacing="15.0" xmlns="http://javafx.com/javafx/23.0.1" xmlns:fx="http://javafx.com/fxml/1" 
+      fx:controller="com.mycompany.javafxapplication1.SecondaryController">
+    <padding>
+        <Insets bottom="20.0" left="20.0" right="20.0" top="20.0" />
+    </padding>
+
+    <Label text="Users List" />
+    <TextField fx:id="userTextField" />
+    <Label text="Welcome" />
+    
+    <VBox spacing="10">
+        <TableView fx:id="dataTableView" VBox.vgrow="ALWAYS" prefHeight="200"/>
+    </VBox>
+
+    <VBox spacing="10">
+        <Label text="Your Files" />
+        <HBox spacing="10" alignment="CENTER">
+            <Button fx:id="uploadButton" onAction="#handleUpload" text="Upload File"/>
+            <Button fx:id="deleteButton" onAction="#handleDelete" text="Delete File"/>
+            <Button fx:id="shareButton" onAction="#handleShare" text="Share"/>
+            <Button fx:id="editButton" onAction="#handleEditFile" text="Edit File"/>
+        </HBox>
+        <TableView fx:id="fileTableView" VBox.vgrow="ALWAYS" prefHeight="200"/>
+    </VBox>
+
+    <HBox spacing="10">
+        <TextField fx:id="customTextField"/>
+        <Button fx:id="refreshBtn" onAction="#refreshBtnHandler" text="Refresh"/>
+        <Button fx:id="deleteAccountBtn" onAction="#deleteAccountHandler" text="Delete Account"/>
+        <Button fx:id="updateAccountBtn" onAction="#updateAccountHandler" text="Update Account"/>
+        <Button fx:id="promoteToAdminBtn" onAction="#promoteToAdminHandler" text="Promote to Admin"/>
+        <Button fx:id="terminalButton" onAction="#openTerminal" text="Terminal"/>
+        <Button fx:id="secondaryButton" onAction="#switchToPrimary" text="Return to Login"/>
+    </HBox>
+</VBox>
