@@ -11,14 +11,13 @@ public class UserDB {
 
     private final SystemLogger logger = SystemLogger.getInstance();
 
-    public void createUserTable() throws ClassNotFoundException {
+    public void createUserTable(Connection conn) throws ClassNotFoundException {
         String query = "CREATE TABLE IF NOT EXISTS Users (" +
                        "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "name VARCHAR(255) UNIQUE, " +
                        "password VARCHAR(255), " +
                        "role VARCHAR(50))";  
-        try (Connection conn = DBConnection.getMySQLConnection();  // ✅ Always use MySQL
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error creating user table: " + e.getMessage());
@@ -48,14 +47,20 @@ public class UserDB {
     public void addUser(String username, String password, String role) {
         logger.logSecurityEvent("New user account created: " + username + " with role: " + role);
         String query = "INSERT INTO Users (name, password, role) VALUES (?, ?, ?)";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            PreparedStatement stmt = conn.prepareStatement(query);
             stmt.setString(1, username);
             stmt.setString(2, password);
             stmt.setString(3, role);
             stmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error adding user: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
     }
 
@@ -77,16 +82,23 @@ public class UserDB {
 
     public boolean validateUser(String username, String password) {
         String query = "SELECT role FROM Users WHERE name = ? AND password = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            PreparedStatement stmt = conn.prepareStatement(query);
             stmt.setString(1, username);
             stmt.setString(2, password);
-            ResultSet rs = stmt.executeQuery();
-            SystemLogger.getInstance().logSecurityEvent("Login attempt for user: " + username);
-            return rs.next();
+            try (ResultSet rs = stmt.executeQuery()) {
+                SystemLogger.getInstance().logSecurityEvent("Login attempt for user: " + username);
+                return rs.next();
+            }
         } catch (SQLException e) {
             System.err.println("Error validating user: " + e.getMessage());
             return false;
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
     }
 

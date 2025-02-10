@@ -69,7 +69,7 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./databases/mysql:/var/lib/mysql
     networks:
       - comp20081_network
 

@@ -10,18 +10,16 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import javafx.application.Platform;
 
 public class FileChunkManager {
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-    private final LoadBalancer loadBalancer;
     private final SecureRandom random;
+    private final LoadBalancer loadBalancer;
     
     public FileChunkManager() {
-        this.loadBalancer = LoadBalancer.getInstance();
         this.random = new SecureRandom();
+        this.loadBalancer = LoadBalancer.getInstance();
     }
     
     public CompletableFuture<List<FileChunk>> splitFile(File file, long fileId) {
@@ -35,6 +33,8 @@ public class FileChunkManager {
                 long totalSize = file.length();
                 long processedSize = 0;
                 
+                System.out.println("Starting file split: " + file.getName() + ", Size: " + totalSize);
+                
                 try (FileInputStream fis = new FileInputStream(file)) {
                     int chunkNumber = 0;
                     int bytesRead;
@@ -43,30 +43,37 @@ public class FileChunkManager {
                         byte[] chunkData = Arrays.copyOf(buffer, bytesRead);
                         byte[] encryptedData = encryptData(chunkData, encryptionKey);
                         
-                        FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, bytesRead);
-                        CompletableFuture<String> containerFuture = loadBalancer.submitOperation(operation);
+                        FileOperation operation = new FileOperation(
+                            file.getName(), 
+                            FileOperation.OperationType.UPLOAD,
+                            bytesRead
+                        );
                         
-                        // Non-blocking wait for container assignment
-                        String containerId = containerFuture.join();
-                        chunks.add(new FileChunk(fileId, chunkNumber++, containerId, encryptedData, encryptionKey));
+                        String containerId = loadBalancer.submitOperation(operation).join();
+                        System.out.println("Assigned to container: " + containerId);
                         
-                        // Update progress
+                        chunks.add(new FileChunk(fileId, chunkNumber, containerId, encryptedData, encryptionKey));
+                        
                         processedSize += bytesRead;
                         final double progress = (double) processedSize / totalSize;
                         Platform.runLater(() -> delayManager.progressProperty().set(progress));
+                        
+                        System.out.println(String.format("Chunk %d processed: %.2f%%", chunkNumber, progress * 100));
+                        chunkNumber++;
                     }
                     
-                    // Ensure progress reaches 100%
                     Platform.runLater(() -> delayManager.progressProperty().set(1.0));
+                    System.out.println("File split complete: " + chunks.size() + " chunks created");
                 }
                 
                 return chunks;
             } catch (Exception e) {
+                System.err.println("Error splitting file: " + e.getMessage());
+                e.printStackTrace();
                 throw new CompletionException(e);
             }
         });
     }
-
     
     private String generateEncryptionKey() throws Exception {
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
@@ -92,16 +99,23 @@ public class FileChunkManager {
     }
     
     public void saveChunk(FileChunk chunk) throws IOException {
-        String chunkPath = "storage/" + chunk.getContainerId() + "/chunk_" +
-                          chunk.getFileId() + "_" + chunk.getChunkNumber();
-        Files.write(Paths.get(chunkPath), chunk.getData());
+        Path storagePath = Paths.get("storage", chunk.getContainerId());
+        Files.createDirectories(storagePath);
+        
+        Path chunkPath = storagePath.resolve(String.format("chunk_%d_%d", 
+            chunk.getFileId(), chunk.getChunkNumber()));
+            
+        Files.write(chunkPath, chunk.getData());
+        System.out.println("Saved chunk to: " + chunkPath);
     }
     
-    
-    public byte[] readChunk(String containerId, long fileId, int chunkNumber, String encryptionKey) throws Exception {
-        String chunkPath = "storage/" + containerId + "/chunk_" + fileId + "_" + chunkNumber;
-        byte[] encryptedData = Files.readAllBytes(Paths.get(chunkPath));
+    public byte[] readChunk(String containerId, long fileId, int chunkNumber, String encryptionKey) 
+            throws Exception {
+        Path chunkPath = Paths.get("storage", containerId, 
+            String.format("chunk_%d_%d", fileId, chunkNumber));
+            
+        System.out.println("Reading chunk from: " + chunkPath);
+        byte[] encryptedData = Files.readAllBytes(chunkPath);
         return decryptData(encryptedData, encryptionKey);
     }
-    
 }

@@ -15,16 +15,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.nio.file.Files;
-import javafx.application.Platform;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Statement;
-
-
-
-
-
 public class FileDB {
     private static final String ENCRYPTION_KEY = "MySecretKey12345";
     private final FileChunkManager chunkManager = new FileChunkManager();
@@ -32,54 +25,33 @@ public class FileDB {
     private final LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
     private SystemLogger logger = SystemLogger.getInstance();
 
-    public void createFileTable() {
+    public void createFileTable(Connection conn) {
         String query = "CREATE TABLE IF NOT EXISTS Files (" +
                        "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "filename VARCHAR(255), owner VARCHAR(255), path VARCHAR(255), " +
                        "last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
-
                        "FOREIGN KEY(owner) REFERENCES Users(name))";
-        try (Connection conn = DBConnection.getMySQLConnection();  // ✅ Always use MySQL
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error creating file table: " + e.getMessage());
         }
     }
-
-    public void createFilesTable() {
-        String query = "CREATE TABLE IF NOT EXISTS Files (" +
-                       "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
-                       "filename VARCHAR(255), " +
-                       "owner VARCHAR(255), " +
-                       "path VARCHAR(255), " +
-                       "FOREIGN KEY(owner) REFERENCES Users(name))";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("Error creating files table: " + e.getMessage());
-        }
-    }
     
-
-
-    public void createFilePermissionsTable() {
+    public void createFilePermissionsTable(Connection conn) {
         String query = "CREATE TABLE IF NOT EXISTS FilePermissions (id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "file_id INTEGER, " +
-                       "user_id VARCHAR(255), " +  // Changed from STRING to VARCHAR
+                       "user_id VARCHAR(255), " +
                        "can_read BOOLEAN DEFAULT false, " +
                        "can_write BOOLEAN DEFAULT false, " +
                        "FOREIGN KEY(file_id) REFERENCES Files(id), " +
                        "FOREIGN KEY(user_id) REFERENCES Users(name))";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error creating file permissions table: " + e.getMessage());
         }
     }
-
 
     public boolean setFilePermissions(long fileId, String userId, boolean canRead, boolean canWrite) {
         String query = "INSERT INTO FilePermissions (file_id, user_id, can_read, can_write) " +
@@ -97,7 +69,6 @@ public class FileDB {
             return false;
         }
     }
-    
     
     public CompletableFuture<Long> addFileRecord(String filename, String owner, String path) {
         logger.logFileOperation("UPLOAD_START", filename, "Initiated by " + owner);
@@ -163,7 +134,7 @@ public class FileDB {
     }
 
 
-    public void createChunksTable() {
+    public void createChunksTable(Connection conn) {
         String query = "CREATE TABLE IF NOT EXISTS FileChunks (" +
                        "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "file_id INTEGER, " +
@@ -171,8 +142,7 @@ public class FileDB {
                        "container_id VARCHAR(255), " +
                        "encryption_key TEXT, " +
                        "FOREIGN KEY(file_id) REFERENCES Files(id))";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error creating chunks table: " + e.getMessage());
@@ -183,15 +153,22 @@ public class FileDB {
 
     public String getFileStorageLocation(long fileId) {
         String query = "SELECT path FROM Files WHERE id = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setLong(1, fileId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("path");
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setLong(1, fileId);
+                if (rs.next()) {
+                    return rs.getString("path");
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving file storage location: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return null;
     }
@@ -199,41 +176,55 @@ public class FileDB {
     
     public ObservableList<UserFile> getUserFiles(String username) {
         ObservableList<UserFile> files = FXCollections.observableArrayList();
-        String query = "SELECT id, filename, owner, path FROM Files WHERE owner = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                files.add(new UserFile(
-                    rs.getLong("id"),
-                    rs.getString("filename"),
-                    rs.getString("owner"),
-                    rs.getString("path")
-                ));
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT id, filename, owner, path FROM Files WHERE owner = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setString(1, username);
+                while (rs.next()) {
+                    files.add(new UserFile(
+                        rs.getLong("id"),
+                        rs.getString("filename"),
+                        rs.getString("owner"),
+                        rs.getString("path")
+                    ));
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving user files: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return files;
     }
 
-
     private Long insertFileRecord(String filename, String owner, String path) {
-        String query = "INSERT INTO Files (filename, owner, path, last_modified) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
-            stmt.setString(1, filename);
-            stmt.setString(2, owner);
-            stmt.setString(3, path);
-            stmt.executeUpdate();
-            
-            ResultSet rs = stmt.getGeneratedKeys();
-            if (rs.next()) {
-                return rs.getLong(1);
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "INSERT INTO Files (filename, owner, path, last_modified) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
+            try (PreparedStatement stmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+                stmt.setString(1, filename);
+                stmt.setString(2, owner);
+                stmt.setString(3, path);
+                stmt.executeUpdate();
+                
+                try (ResultSet rs = stmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        return rs.getLong(1);
+                    }
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error inserting file record: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return -1L;
     }
@@ -252,17 +243,24 @@ public class FileDB {
     }
 
     public FilePermission getFilePermissions(long fileId, String userId) {
-        String query = "SELECT can_read, can_write FROM FilePermissions WHERE file_id = ? AND user_id = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setLong(1, fileId);
-            stmt.setString(2, userId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return new FilePermission(rs.getBoolean("can_read"), rs.getBoolean("can_write"));
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT can_read, can_write FROM FilePermissions WHERE file_id = ? AND user_id = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setLong(1, fileId);
+                stmt.setString(2, userId);
+                if (rs.next()) {
+                    return new FilePermission(rs.getBoolean("can_read"), rs.getBoolean("can_write"));
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving file permissions: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return new FilePermission(false, false);
     }
@@ -427,93 +425,139 @@ public class FileDB {
 
     private List<FileChunk> getFileChunks(Long fileId) {
         List<FileChunk> chunks = new ArrayList<>();
-        String query = "SELECT chunk_number, container_id, encryption_key FROM FileChunks WHERE file_id = ? ORDER BY chunk_number";
-        
-        try (Connection conn = DBConnection.getMySQLConnection();
-            PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setLong(1, fileId);
-            ResultSet rs = stmt.executeQuery();
-            
-            while (rs.next()) {
-                chunks.add(new FileChunk(
-                    fileId,
-                    rs.getInt("chunk_number"),
-                    rs.getString("container_id"),
-                    new byte[0], // Data will be loaded when needed
-                    rs.getString("encryption_key")
-                ));
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT chunk_number, container_id, encryption_key FROM FileChunks WHERE file_id = ? ORDER BY chunk_number";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setLong(1, fileId);
+                while (rs.next()) {
+                    chunks.add(new FileChunk(
+                        fileId,
+                        rs.getInt("chunk_number"),
+                        rs.getString("container_id"),
+                        new byte[0], // Data will be loaded when needed
+                        rs.getString("encryption_key")
+                    ));
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving file chunks: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return chunks;
-        }
-
+    }
 
     private String getFileName(Long fileId) {
-        String query = "SELECT filename FROM Files WHERE id = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setLong(1, fileId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("filename");
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT filename FROM Files WHERE id = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setLong(1, fileId);
+                if (rs.next()) {
+                    return rs.getString("filename");
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving filename: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return "";
     }
 
     private long getFileSize(Long fileId) {
-        String query = "SELECT path FROM Files WHERE id = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setLong(1, fileId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                File file = new File(rs.getString("path"));
-                return file.length();
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT path FROM Files WHERE id = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setLong(1, fileId);
+                if (rs.next()) {
+                    File file = new File(rs.getString("path"));
+                    return file.length();
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving file size: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return 0;
     }
 
     public long getFileId(String filename, String owner) {
-        String query = "SELECT id FROM Files WHERE filename = ? AND owner = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, filename);
-            stmt.setString(2, owner);
-            try (ResultSet rs = stmt.executeQuery()) {
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            String query = "SELECT id FROM Files WHERE filename = ? AND owner = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                stmt.setString(1, filename);
+                stmt.setString(2, owner);
                 if (rs.next()) {
                     return rs.getLong("id");
                 }
             }
         } catch (SQLException e) {
             System.err.println("Error retrieving file ID: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
         return -1;
     }
 
     public boolean setFilePermissions(String filename, String owner, String targetUser, boolean canRead, boolean canWrite) {
-        long fileId = getFileId(filename, owner);
-        if (fileId < 0) { // Or whatever indicates an invalid file id
-            System.err.println("File not found for the given filename and owner.");
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            long fileId = getFileId(filename, owner);
+            if (fileId < 0) {
+                System.err.println("File not found for the given filename and owner.");
+                return false;
+            }
+            return setFilePermissions(fileId, targetUser, canRead, canWrite);
+        } catch (SQLException e) {
+            System.err.println("Error setting file permissions: " + e.getMessage());
             return false;
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
-        return setFilePermissions(fileId, targetUser, canRead, canWrite);
     }
 
     public FilePermission getFilePermissions(String filename, String owner, String user) {
-        long fileId = getFileId(filename, owner);
-        if (fileId < 0) {
-            System.err.println("File not found for the given filename and owner.");
-            return null;
+        Connection conn = null;
+        try {
+            conn = DBConnection.getMySQLConnection();
+            long fileId = getFileId(filename, owner);
+            if (fileId < 0) {
+                System.err.println("File not found for the given filename and owner.");
+                return null;
+            }
+            return getFilePermissions(fileId, user);
+        } catch (SQLException e) {
+            System.err.println("Error getting file permissions: " + e.getMessage());
+            return new FilePermission(false, false);
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
-        return getFilePermissions(fileId, user);
     }
 
     public CompletableFuture<Boolean> updateFile(Long fileId, String encryptedContent) {
@@ -522,13 +566,14 @@ public class FileDB {
         
         return delayManager.simulateDelay(30,90)
             .thenApplyAsync(v -> {
+                Connection conn = null;
                 try {
                     String filePath = getFileStorageLocation(fileId);
                     if (filePath == null) return false;
                     
+                    conn = DBConnection.getMySQLConnection();
                     String query = "UPDATE Files SET last_modified = CURRENT_TIMESTAMP WHERE id = ?";
-                    try (Connection conn = DBConnection.getMySQLConnection();
-                         PreparedStatement stmt = conn.prepareStatement(query)) {
+                    try (PreparedStatement stmt = conn.prepareStatement(query)) {
                         stmt.setLong(1, fileId);
                         stmt.executeUpdate();
                     }
@@ -540,6 +585,10 @@ public class FileDB {
                 } catch (Exception e) {
                     System.err.println("Error updating file: " + e.getMessage());
                     return false;
+                } finally {
+                    if (conn != null) {
+                        DBConnection.releaseConnection(conn);
+                    }
                 }
             });
     }

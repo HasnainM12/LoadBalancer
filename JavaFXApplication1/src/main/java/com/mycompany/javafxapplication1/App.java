@@ -7,6 +7,7 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,23 +19,30 @@ public class App extends Application {
     @Override
     public void start(Stage stage) throws IOException {
         LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
-        loadBalancerDB.createStorageContainersTable(); // ✅ Ensure table is created
-
-        SessionDB sessionDB = new SessionDB();
-        sessionDB.createSessionTable();
-
         FileDB fileDB = new FileDB();
         UserDB userDB = new UserDB();
+        SessionDB sessionDB = new SessionDB();
 
+        Connection conn = null;
         try {
-            userDB.createUserTable();  
-            fileDB.createFilesTable();
-            fileDB.createFilePermissionsTable();
-            fileDB.createChunksTable();
-            sessionDB.createSessionTable();
-            DatabaseSynchroniser.getInstance(); // Start sync service
-        } catch (ClassNotFoundException ex) {
+            conn = DBConnection.getMySQLConnection();
+            
+            // Create tables in correct order (respecting foreign key constraints)
+            loadBalancerDB.createStorageContainersTable(conn);
+            userDB.createUserTable(conn);
+            fileDB.createFileTable(conn);
+            fileDB.createFilePermissionsTable(conn);
+            fileDB.createChunksTable(conn);
+            sessionDB.createSessionTable();  // SessionDB uses SQLite, so no need for MySQL connection
+
+            // Start services
+            DatabaseSynchroniser.getInstance();
+        } catch (Exception ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            if (conn != null) {
+                DBConnection.releaseConnection(conn);
+            }
         }
 
         FXMLLoader loader = new FXMLLoader(getClass().getResource("primary.fxml"));

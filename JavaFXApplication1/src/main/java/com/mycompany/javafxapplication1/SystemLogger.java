@@ -9,7 +9,7 @@ import java.nio.file.*;
 public class SystemLogger {
     private static SystemLogger instance;
     private final BlockingQueue<LogEntry> logQueue = new LinkedBlockingQueue<>();
-    private final String LOG_DIR = "logs";
+    private final String LOG_DIR = System.getProperty("user.dir") + File.separator + "logs";
     private final String SYSTEM_LOG = "system.log";
     private final String ACCESS_LOG = "access.log";
     private final String ERROR_LOG = "error.log";
