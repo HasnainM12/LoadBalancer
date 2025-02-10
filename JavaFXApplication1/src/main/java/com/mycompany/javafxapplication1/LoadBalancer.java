@@ -236,4 +236,35 @@ public class LoadBalancer {
             System.err.println("Error saving chunk metadata: " + e.getMessage());
         }
     }
+
+    public void shutdown() {
+        // Shutdown the executor service
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        // Shutdown the health monitor
+        if (healthMonitor != null) {
+            healthMonitor.shutdown();
+        }
+
+        // Shutdown the LoadBalancerDB
+        if (loadBalancerDB != null) {
+            loadBalancerDB.shutdown();
+        }
+
+        // Clear collections
+        requestQueue.clear();
+        storageContainers.clear();
+        containerLoad.clear();
+
+        // Reset instance
+        instance = null;
+    }
 }

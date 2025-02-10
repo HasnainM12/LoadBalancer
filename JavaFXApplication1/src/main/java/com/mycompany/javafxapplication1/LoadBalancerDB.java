@@ -1,5 +1,6 @@
 package com.mycompany.javafxapplication1;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -31,19 +32,14 @@ public class LoadBalancerDB {
 
     private void checkContainerHealth(String containerName) {
         try {
-            ProcessBuilder pb = new ProcessBuilder("docker", "inspect", "-f", "{{.State.Running}}", containerName);
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+            File containerDir = new File("storage/" + containerName);
+            boolean isHealthy = containerDir.exists() && containerDir.isDirectory() && containerDir.canWrite();
+            boolean previousHealth = containerHealth.getOrDefault(containerName, false);
             
-            if (process.waitFor(5, TimeUnit.SECONDS)) {
-                boolean isHealthy = process.exitValue() == 0;
-                boolean previousHealth = containerHealth.getOrDefault(containerName, false);
-                
-                if (previousHealth != isHealthy) {
-                    containerHealth.put(containerName, isHealthy);
-                    updateContainerStatus(containerName, isHealthy);
-                    System.out.println("Container " + containerName + " health changed: " + previousHealth + " -> " + isHealthy);
-                }
+            if (previousHealth != isHealthy) {
+                containerHealth.put(containerName, isHealthy);
+                updateContainerStatus(containerName, isHealthy);
+                System.out.println("Container " + containerName + " health changed: " + previousHealth + " -> " + isHealthy);
             }
         } catch (Exception e) {
             System.err.println("Error checking container health: " + e.getMessage());
