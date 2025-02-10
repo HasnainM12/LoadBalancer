@@ -14,12 +14,17 @@ import javafx.application.Platform;
 
 public class FileChunkManager {
     private static final int CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-    private final SecureRandom random;
-    private final LoadBalancer loadBalancer;
+    private SecureRandom random;
+    private LoadBalancer loadBalancer; // Remove final
+    private final FileDB fileDB;
     
-    public FileChunkManager() {
+    public FileChunkManager(FileDB fileDB) {
         this.random = new SecureRandom();
-        this.loadBalancer = LoadBalancer.getInstance();
+        this.fileDB = fileDB;
+    }
+    
+    public void setLoadBalancer(LoadBalancer loadBalancer) {
+        this.loadBalancer = loadBalancer;
     }
     
     public CompletableFuture<List<FileChunk>> splitFile(File file, long fileId) {

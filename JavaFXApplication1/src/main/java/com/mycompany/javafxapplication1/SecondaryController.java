@@ -155,7 +155,8 @@ public class SecondaryController {
             fileDB.addFileRecord(file.getName(), Session.getInstance().getUsername(), file.getPath())
                 .thenAccept(fileId -> {
                     if (fileId != -1) {
-                        FileChunkManager chunkManager = new FileChunkManager();
+                        FileChunkManager chunkManager = new FileChunkManager(fileDB);
+                        chunkManager.setLoadBalancer(LoadBalancer.getInstance());
                         chunkManager.splitFile(file, fileId)
                             .thenAccept(chunks -> {
                                 try {

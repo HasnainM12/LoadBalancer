@@ -39,11 +39,13 @@ public class DBConnection {
 
     public static Connection getMySQLConnection() throws SQLException {
         try {
+            System.out.println("Attempting MySQL connection...");
             Connection conn = connectionPool.poll();
             if (conn == null || conn.isClosed()) {
                 conn = createNewConnection();
             }
-            
+            System.out.println("MySQL connection successful");
+
             // Initialize tables only once
             if (!tablesInitialized) {
                 synchronized (DBConnection.class) {
@@ -56,16 +58,16 @@ public class DBConnection {
                                 UserDB userDB = new UserDB();
                                 FileDB fileDB = new FileDB();
                                 LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
-                                
+
                                 userDB.createUserTable(initConn);
                                 loadBalancerDB.createStorageContainersTable(initConn);
                                 fileDB.createFileTable(initConn);
                                 fileDB.createFilePermissionsTable(initConn);
                                 fileDB.createChunksTable(initConn);
-                                
+
                                 // Initialize storage containers
                                 initializeStorageContainers(loadBalancerDB, initConn);
-                                
+
                                 tablesInitialized = true;
                             } finally {
                                 initConn.close();
@@ -76,12 +78,15 @@ public class DBConnection {
                     }
                 }
             }
-            
+
             return conn;
         } catch (SQLException e) {
+            System.err.println("MySQL connection failed: " + e.getMessage());
+            e.printStackTrace();
             throw new SQLException("Failed to get connection from pool", e);
         }
     }
+
 
     public static void releaseConnection(Connection conn) {
         if (conn != null) {

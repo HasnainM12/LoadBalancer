@@ -23,6 +23,7 @@ public class LoadBalancer {
     private static final Logger LOGGER = Logger.getLogger(LoadBalancer.class.getName());
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS; // Default to FCFS
     private final SystemLogger logger = SystemLogger.getInstance();
+    private final FileDB fileDB;
     
     private LoadBalancer() {
         requestQueue = new ConcurrentLinkedQueue<>();
@@ -31,8 +32,11 @@ public class LoadBalancer {
         containerLoad = new ConcurrentHashMap<>();
         executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         this.healthMonitor = new ContainerHealthMonitor(loadBalancerDB);
+        this.fileDB = new FileDB(); // Create FileDB
         initializeContainers();
         startRequestProcessor();
+        this.fileDB.setLoadBalancer(this); // Set this instance
+
     }
     
     public static LoadBalancer getInstance() {

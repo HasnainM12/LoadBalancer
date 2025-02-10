@@ -18,12 +18,21 @@ import java.util.concurrent.CompletableFuture;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Statement;
+
+
 public class FileDB {
     private static final String ENCRYPTION_KEY = "MySecretKey12345";
-    private final FileChunkManager chunkManager = new FileChunkManager();
-    private final LoadBalancer loadBalancer = LoadBalancer.getInstance();
+    private LoadBalancer loadBalancer;
+    private final FileChunkManager chunkManager = new FileChunkManager(this);
     private final LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
     private SystemLogger logger = SystemLogger.getInstance();
+    
+
+
+    public void setLoadBalancer(LoadBalancer loadBalancer) {
+    this.loadBalancer = loadBalancer;
+    this.chunkManager.setLoadBalancer(loadBalancer);
+    }
 
     public void createFileTable(Connection conn) {
         String query = "CREATE TABLE IF NOT EXISTS Files (" +

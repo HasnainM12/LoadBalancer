@@ -29,17 +29,18 @@ public class App extends Application {
             throwable.printStackTrace();
         });
     }
-    
+
     private void initializeSystem(Stage stage) {
         LoadBalancerDB loadBalancerDB = null;
         Connection conn = null;
         try {
-            // Step 1: Initialize storage system
+            System.out.println("Creating storage directory...");
             File storageDir = new File("storage");
             if (!storageDir.exists() && !storageDir.mkdirs()) {
                 throw new IOException("Failed to create storage directory");
             }
-
+    
+            System.out.println("Creating container directories...");
             // Create and verify container directories
             for (int i = 1; i <= 4; i++) {
                 File containerDir = new File(storageDir, "container" + i);
@@ -47,18 +48,20 @@ public class App extends Application {
                     throw new IOException("Failed to create container directory: " + containerDir);
                 }
             }
-
-            // Step 2: Initialize databases
+    
+            System.out.println("Initializing databases...");
+            // Initialize databases
             loadBalancerDB = new LoadBalancerDB();
             FileDB fileDB = new FileDB();
             UserDB userDB = new UserDB();
             SessionDB sessionDB = new SessionDB();
-
+    
             conn = DBConnection.getMySQLConnection();
             if (conn == null) {
                 throw new SQLException("Failed to establish database connection");
             }
-
+    
+            System.out.println("Creating tables...");
             // Create tables in correct order
             loadBalancerDB.createStorageContainersTable(conn);
             userDB.createUserTable(conn);
@@ -66,20 +69,25 @@ public class App extends Application {
             fileDB.createFilePermissionsTable(conn);
             fileDB.createChunksTable(conn);
             sessionDB.createSessionTable();
-
+    
             // Initialize storage containers in database
             for (int i = 1; i <= 4; i++) {
                 loadBalancerDB.addStorageContainer("container" + i);
             }
-
-            // Step 3: Initialize services
+    
+            System.out.println("Initializing services...");
+            // Initialize services
             LoadBalancer.getInstance();
             DatabaseSynchroniser.getInstance();
-
-            // Step 4: Initialize UI
+    
+            System.out.println("Showing primary stage...");
+            // Initialize UI
             showPrimaryStage(stage);
+    
         } catch (Exception ex) {
+            System.err.println("Failed to initialize system: " + ex.getMessage());
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            ex.printStackTrace();
             throw new RuntimeException("Failed to initialize system", ex);
         } finally {
             if (conn != null) {
@@ -87,6 +95,7 @@ public class App extends Application {
             }
         }
     }
+    
 
     private void showPrimaryStage(Stage stage) throws IOException {
         try {
