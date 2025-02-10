@@ -1,6 +1,7 @@
 package com.mycompany.javafxapplication1;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -18,11 +19,17 @@ import java.util.logging.Logger;
  */
 public class App extends Application {
 
+
     @Override
     public void start(Stage stage) throws IOException {
-        initializeSystem(stage);
+        Platform.startup(() -> initializeSystem(stage));
+    
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            System.err.println("Uncaught error: " + throwable);
+            throwable.printStackTrace();
+        });
     }
-
+    
     private void initializeSystem(Stage stage) {
         LoadBalancerDB loadBalancerDB = null;
         Connection conn = null;
@@ -82,12 +89,26 @@ public class App extends Application {
     }
 
     private void showPrimaryStage(Stage stage) throws IOException {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("primary.fxml"));
-        Parent root = loader.load();
-        Scene scene = new Scene(root, 640, 480);
-        stage.setScene(scene);
-        stage.setTitle("Primary View");
-        stage.show();
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("primary.fxml"));
+            Parent root = loader.load();
+            
+            // Add explicit error checking
+            if (root == null) {
+                throw new IOException("Failed to load FXML");
+            }
+            
+            Scene scene = new Scene(root, 640, 480);
+            stage.setScene(scene);
+            stage.setTitle("Primary View");
+            
+            // Run on JavaFX thread
+            Platform.runLater(() -> stage.show());
+        } catch (Exception e) {
+            System.err.println("Error showing primary stage: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     @Override
@@ -97,6 +118,8 @@ public class App extends Application {
     }
 
     public static void main(String[] args) {
-        launch();
+        System.setProperty("javafx.platform", "gtk");
+        System.setProperty("prism.order", "sw");
+        launch(args);
     }
 }
