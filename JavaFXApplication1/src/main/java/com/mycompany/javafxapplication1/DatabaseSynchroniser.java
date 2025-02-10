@@ -109,7 +109,7 @@ public class DatabaseSynchroniser {
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
-                sessions.put(rs.getString("username"),
+                sessions.put(rs.getString("username"), 
                     new SessionData(rs.getString("user_role"),
                         LocalDateTime.parse(rs.getString("last_activity"))));
             }

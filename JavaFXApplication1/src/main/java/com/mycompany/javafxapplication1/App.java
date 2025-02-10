@@ -97,12 +97,6 @@ public class App extends Application {
     }
 
     public static void main(String[] args) {
-        // Force software rendering and disable hardware acceleration
-        System.setProperty("prism.order", "sw");
-        System.setProperty("javafx.animation.fullspeed", "true");
-        System.setProperty("prism.forceGPU", "false");
-        System.setProperty("prism.vsync", "false");
-        System.setProperty("quantum.multithreaded", "false");
         launch();
     }
 }

@@ -76,7 +76,7 @@ public class LoadBalancer {
         String container = getNextAvailableContainer();
         logger.log(LogLevel.INFO, "Container " + container + " selected for operation: " + operation.getType());
     
-        try {
+        try { 
             Thread.sleep(operation.getEstimatedProcessingTime());
     
             // ✅ FIX: Pass the operation type correctly
