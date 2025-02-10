@@ -6,6 +6,7 @@ module com.mycompany.javafxapplication1 {
     requires transitive javafx.graphics;
     requires javafx.base;
     requires java.logging;
+    requires java.desktop;  // Required for Java2D rendering
 
     opens com.mycompany.javafxapplication1 to javafx.fxml, javafx.graphics, javafx.base;
     exports com.mycompany.javafxapplication1;

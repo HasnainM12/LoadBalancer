@@ -60,9 +60,8 @@ public class App extends Application {
     }
 
     public static void main(String[] args) {
-        // Basic graphics configuration for software rendering
+        // Basic software rendering configuration
         System.setProperty("prism.order", "sw");
-        System.setProperty("glass.platform", "gtk");
         launch();
     }
 }
