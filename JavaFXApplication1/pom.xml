@@ -103,6 +103,10 @@
                         <option>javafx.base/com.sun.javafx.event=ALL-UNNAMED</option>
                         <option>--add-opens</option>
                         <option>javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED</option>
+                        <option>-Dprism.order=sw</option>
+                        <option>-Djavafx.animation.fullspeed=true</option>
+                        <option>-Dprism.verbose=true</option>
+                        <option>-Djavafx.verbose=true</option>
                     </options>
                 </configuration>
             </plugin>
