@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import com.mycompany.javafxapplication1.SystemLogger.LogLevel;
 
@@ -106,7 +107,7 @@ public class LoadBalancer {
     
         List<String> healthyContainers = storageContainers.stream()
             .filter(container -> healthMonitor.getContainerStatus(container) == ContainerHealthMonitor.ContainerStatus.HEALTHY)
-            .toList();
+            .collect(Collectors.toList());
     
         if (healthyContainers.isEmpty()) {
             throw new IllegalStateException("No healthy containers available");
