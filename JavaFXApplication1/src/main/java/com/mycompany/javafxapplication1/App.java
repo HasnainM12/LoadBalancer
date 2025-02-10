@@ -60,7 +60,7 @@ public class App extends Application {
     }
 
     public static void main(String[] args) {
-        // Configure graphics properties before launch
+        // Basic graphics configuration for software rendering
         System.setProperty("prism.order", "sw");
         System.setProperty("glass.platform", "gtk");
         launch();
