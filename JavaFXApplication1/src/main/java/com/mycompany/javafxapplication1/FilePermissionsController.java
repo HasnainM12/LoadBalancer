@@ -1,32 +1,17 @@
 package com.mycompany.javafxapplication1;
 
 import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.collections.FXCollections;
-import javafx.scene.Parent;
-import javafx.scene.control.Alert.AlertType;
-import java.io.IOException;
 import java.util.stream.Collectors;
 
 public class FilePermissionsController {
-    @FXML 
-    private ComboBox<String> userComboBox;
-    
-    @FXML 
-    private CheckBox readPermissionCheckBox;
-    
-    @FXML 
-    private CheckBox writePermissionCheckBox;
-    
-    @FXML 
-    private Button saveButton;
-    
-    @FXML 
-    private Button cancelButton;
+    @FXML private ComboBox<String> userComboBox;
+    @FXML private CheckBox readPermissionCheckBox;
+    @FXML private CheckBox writePermissionCheckBox;
+    @FXML private Button saveButton;
+    @FXML private Button cancelButton;
 
     private Long fileId;
     private String filename;
@@ -35,13 +20,11 @@ public class FilePermissionsController {
     private UserDB userDB;
     
     @FXML
-    public void initialize() {
+    public void initialise() {
         fileDB = new FileDB();
         userDB = new UserDB();
-
-        // Initialize button handlers
         saveButton.setOnAction(event -> handleSave());
-        cancelButton.setOnAction(event -> closeDialog());
+        cancelButton.setOnAction(event -> closeDialogue());
     }
     
     @FXML
@@ -49,19 +32,16 @@ public class FilePermissionsController {
         this.fileId = fileId;
         this.filename = filename;
         this.owner = owner;
-
+    
         if (Session.getInstance().isAdmin() || owner.equals(Session.getInstance().getUsername())) {
             loadUsers();
             setupUserSelectionHandler();
         } else {
-            showError("Only file owners and admins can share files");
-            closeDialog();
+            showError("Only file owners and administrators can share files");
+            closeDialogue();
         }
     }
 
-
-
-    // In FilePermissionsController.java
     private void loadUsers() {
         try {
             var users = userDB.getAllUsers()
@@ -72,11 +52,11 @@ public class FilePermissionsController {
     
             userComboBox.setItems(users);
         } catch (Exception e) {
-            e.printStackTrace();
             showError("Failed to load users");
         }
     }
-    
+
+
     private void setupUserSelectionHandler() {
         userComboBox.setOnAction(event -> {
             String selectedUser = userComboBox.getValue();
@@ -87,9 +67,7 @@ public class FilePermissionsController {
             }
         });
     }
-    
 
-    
     @FXML
     private void handleSave() {
         String selectedUser = userComboBox.getValue();
@@ -116,16 +94,13 @@ public class FilePermissionsController {
 
         if (success) {
             showSuccess("Permissions updated successfully");
-            closeDialog();
+            closeDialogue();
         } else {
             showError("Failed to save permissions");
-            SystemLogger.getInstance().log(SystemLogger.LogLevel.ERROR, 
-                "Failed to update permissions for file " + fileId);
         }
     }
-        
     
-    private void closeDialog() {
+    private void closeDialogue() {
         ((Stage) saveButton.getScene().getWindow()).close();
     }
     

@@ -3,26 +3,24 @@ package com.mycompany.javafxapplication1;
 public class FileOperation {
     private final String filename;
     private final OperationType type;
-    private final long size;
     private final long timestamp;
+    private final long size; // Add a size field
 
-    
     public enum OperationType {
         UPLOAD, DOWNLOAD, DELETE
     }
-    
+
     public FileOperation(String filename, OperationType type, long size) {
         this.filename = filename;
         this.type = type;
-        this.size = size;
         this.timestamp = System.currentTimeMillis();
+        this.size = size; // Initialize the size field
     }
-    
+
     public String getFilename() { return filename; }
     public OperationType getType() { return type; }
-    public long getSize() { return size; }
     public long getTimestamp() { return timestamp; }
-    
+
     public long getEstimatedProcessingTime() {
         long baseTime;
         switch(type) {
@@ -33,6 +31,4 @@ public class FileOperation {
         }
         return baseTime + (size / 1024 / 1024 * 100); // Time scales with file size
     }
-    
-    
 }

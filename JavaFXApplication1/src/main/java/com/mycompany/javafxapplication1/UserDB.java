@@ -8,10 +8,9 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 public class UserDB {
-
     private final SystemLogger logger = SystemLogger.getInstance();
 
-    public void createUserTable(Connection conn) throws ClassNotFoundException {
+    public void createUserTable(Connection conn) throws SQLException {
         String query = "CREATE TABLE IF NOT EXISTS Users (" +
                        "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "name VARCHAR(255) UNIQUE, " +
@@ -19,176 +18,145 @@ public class UserDB {
                        "role VARCHAR(50))";  
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("Error creating user table: " + e.getMessage());
         }
     }
-
-    public void deleteUserTable() {
-        String disableFK = "SET FOREIGN_KEY_CHECKS=0";
-        String dropTable = "DROP TABLE IF EXISTS Users";
-        String enableFK = "SET FOREIGN_KEY_CHECKS=1";
-        
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt1 = conn.prepareStatement(disableFK);
-             PreparedStatement stmt2 = conn.prepareStatement(dropTable);
-             PreparedStatement stmt3 = conn.prepareStatement(enableFK)) {
-            
-            stmt1.executeUpdate();
-            stmt2.executeUpdate();
-            stmt3.executeUpdate();
-            
-        } catch (SQLException e) {
-            System.err.println("Error deleting user table: " + e.getMessage());
-        }
-    }
-    
 
     public void addUser(String username, String password, String role) {
-        logger.logSecurityEvent("New user account created: " + username + " with role: " + role);
-        String query = "INSERT INTO Users (name, password, role) VALUES (?, ?, ?)";
-        Connection conn = null;
-        try {
-            conn = DBConnection.getMySQLConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            stmt.setString(3, role);
-            stmt.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("Error adding user: " + e.getMessage());
-        } finally {
-            if (conn != null) {
-                DBConnection.releaseConnection(conn);
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            logger.logSecurityEvent("New user account created: " + username + " with role: " + role);
+            String query = "INSERT INTO Users (name, password, role) VALUES (?, ?, ?)";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                stmt.setString(2, password);
+                stmt.setString(3, role);
+                stmt.executeUpdate();
             }
-        }
-    }
-
-    public boolean updateUserWithRole(String oldUsername, String newUsername, String newPassword, String newRole) {
-        logger.logSecurityEvent("User account updated - Username: " + oldUsername + " -> " + newUsername + ", Role: " + newRole);
-        String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, newUsername);
-            stmt.setString(2, newPassword);
-            stmt.setString(3, newRole);
-            stmt.setString(4, oldUsername);
-            return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            System.err.println("Error updating user: " + e.getMessage());
-            return false;
+            logger.logError("Error adding user", e);
+            throw new RuntimeException(e);
         }
     }
 
     public boolean validateUser(String username, String password) {
-        String query = "SELECT role FROM Users WHERE name = ? AND password = ?";
-        Connection conn = null;
-        try {
-            conn = DBConnection.getMySQLConnection();
-            PreparedStatement stmt = conn.prepareStatement(query);
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            try (ResultSet rs = stmt.executeQuery()) {
-                SystemLogger.getInstance().logSecurityEvent("Login attempt for user: " + username);
-                return rs.next();
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "SELECT role FROM Users WHERE name = ? AND password = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                stmt.setString(2, password);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    logger.logSecurityEvent("Login attempt for user: " + username);
+                    return rs.next();
+                }
             }
         } catch (SQLException e) {
-            System.err.println("Error validating user: " + e.getMessage());
+            logger.logError("Error validating user", e);
             return false;
-        } finally {
-            if (conn != null) {
-                DBConnection.releaseConnection(conn);
-            }
         }
     }
 
     public boolean updateUser(String oldUsername, String newUsername, String newPassword) {
-        String query = "UPDATE Users SET name = ?, password = ? WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, newUsername);
-            stmt.setString(2, newPassword);
-            stmt.setString(3, oldUsername);
-            return stmt.executeUpdate() > 0;
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "UPDATE Users SET name = ?, password = ? WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, newUsername);
+                stmt.setString(2, newPassword);
+                stmt.setString(3, oldUsername);
+                return stmt.executeUpdate() > 0;
+            }
         } catch (SQLException e) {
-            System.err.println("Error updating user: " + e.getMessage());
+            logger.logError("Error updating user", e);
+            return false;
+        }
+    }
+
+    public boolean updateUserWithRole(String oldUsername, String newUsername, String newPassword, String newRole) {
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, newUsername);
+                stmt.setString(2, newPassword);
+                stmt.setString(3, newRole);
+                stmt.setString(4, oldUsername);
+                return stmt.executeUpdate() > 0;
+            }
+        } catch (SQLException e) {
+            logger.logError("Error updating user with role", e);
             return false;
         }
     }
 
     public boolean usernameExists(String username) {
-        String query = "SELECT COUNT(*) FROM Users WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt(1) > 0;
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "SELECT COUNT(*) FROM Users WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                ResultSet rs = stmt.executeQuery();
+                return rs.next() && rs.getInt(1) > 0;
             }
         } catch (SQLException e) {
-            System.err.println("Error checking if username exists: " + e.getMessage());
+            logger.logError("Error checking username existence", e);
+            return false;
         }
-        return false;
     }
-    
-    
 
     public boolean deleteUser(String username) {
-        logger.logSecurityEvent("User account deleted: " + username);
-        String query = "DELETE FROM Users WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            return stmt.executeUpdate() > 0;
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            logger.logSecurityEvent("User account deleted: " + username);
+            String query = "DELETE FROM Users WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                return stmt.executeUpdate() > 0;
+            }
         } catch (SQLException e) {
-            System.err.println("Error deleting user: " + e.getMessage());
+            logger.logError("Error deleting user", e);
             return false;
         }
     }
 
     public String getUserRole(String username) {
-        String query = "SELECT role FROM Users WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return rs.getString("role");
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "SELECT role FROM Users WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                ResultSet rs = stmt.executeQuery();
+                return rs.next() ? rs.getString("role") : null;
             }
         } catch (SQLException e) {
-            System.err.println("Error retrieving user role: " + e.getMessage());
+            logger.logError("Error getting user role", e);
+            return null;
         }
-        return null;
     }
 
     public boolean promoteToAdmin(String username) {
-        logger.logSecurityEvent("User promoted to admin: " + username);
-        String query = "UPDATE Users SET role = 'admin' WHERE name = ?";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            return stmt.executeUpdate() > 0;
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            logger.logSecurityEvent("User promoted to admin: " + username);
+            String query = "UPDATE Users SET role = 'admin' WHERE name = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                return stmt.executeUpdate() > 0;
+            }
         } catch (SQLException e) {
-            System.err.println("Error promoting user to admin: " + e.getMessage());
+            logger.logError("Error promoting user", e);
             return false;
         }
     }
 
     public ObservableList<User> getAllUsers() {
         ObservableList<User> users = FXCollections.observableArrayList();
-        String query = "SELECT name, password, role FROM Users";
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(query);
-             ResultSet rs = stmt.executeQuery()) {
-            while (rs.next()) {
-                users.add(new User(
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            String query = "SELECT name, password, role FROM Users";
+            try (PreparedStatement stmt = conn.prepareStatement(query);
+                 ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    users.add(new User(
                         rs.getString("name"),
                         rs.getString("password"),
                         rs.getString("role")
-                ));
+                    ));
+                }
             }
         } catch (SQLException e) {
-            System.err.println("Error retrieving users: " + e.getMessage());
+            logger.logError("Error getting all users", e);
         }
         return users;
     }

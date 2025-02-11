@@ -10,14 +10,8 @@ public class DelayManager {
     private static DelayManager instance;
     private final Random random = new Random();
     private final DoubleProperty progressProperty = new SimpleDoubleProperty(0);
-    private final TrafficManager trafficManager = TrafficManager.getInstance();
     
-    private DelayManager() {
-        // Listen for traffic level changes
-        trafficManager.trafficLevelProperty().addListener((obs, oldVal, newVal) -> {
-            System.out.println("Traffic level changed to: " + newVal + " - " + trafficManager.getCurrentStatus());
-        });
-    }
+    private DelayManager() {}
     
     public static DelayManager getInstance() {
         if (instance == null) {
@@ -31,17 +25,9 @@ public class DelayManager {
     }
     
     public CompletableFuture<Void> simulateDelay(int minSeconds, int maxSeconds) {
-        // Apply traffic multiplier to delay
-        double multiplier = trafficManager.getTrafficMultiplier();
-        int adjustedMinSeconds = (int)(minSeconds * multiplier);
-        int adjustedMaxSeconds = (int)(maxSeconds * multiplier);
-        
-        int delaySeconds = random.nextInt(adjustedMaxSeconds - adjustedMinSeconds + 1) + adjustedMinSeconds;
+        int delaySeconds = random.nextInt(maxSeconds - minSeconds + 1) + minSeconds;
         long startTime = System.currentTimeMillis();
         long delayMillis = delaySeconds * 1000L;
-        
-        System.out.println("Current traffic multiplier: " + multiplier + "x");
-        System.out.println("Adjusted delay: " + delaySeconds + " seconds");
         
         return CompletableFuture.runAsync(() -> {
             try {
