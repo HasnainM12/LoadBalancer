@@ -11,15 +11,21 @@
     </padding>
 
     <Label text="Users List" />
-    <TextField fx:id="userTextField" />
-    <Label text="Welcome" />
-    
-    <VBox spacing="10">
-        <TableView fx:id="dataTableView" VBox.vgrow="ALWAYS" prefHeight="200"/>
+    <TextField fx:id="userTextField" maxWidth="300" />
+
+    <!-- Expanded User List -->
+    <VBox spacing="10" VBox.vgrow="ALWAYS">
+        <TableView fx:id="dataTableView" VBox.vgrow="ALWAYS" prefHeight="300" minHeight="200">
+            <columns>
+                <TableColumn text="Username" />
+                <TableColumn text="Role" />
+            </columns>
+        </TableView>
     </VBox>
 
+    <Label text="Your Files" />
+
     <VBox spacing="10">
-        <Label text="Your Files" />
         <HBox spacing="10" alignment="CENTER">
             <Button fx:id="uploadButton" onAction="#handleUpload" text="Upload File"/>
             <Button fx:id="deleteButton" onAction="#handleDelete" text="Delete File"/>
@@ -30,7 +36,7 @@
     </VBox>
 
     <HBox spacing="10">
-        <TextField fx:id="customTextField"/>
+        <TextField fx:id="customTextField" maxWidth="250"/>
         <Button fx:id="refreshBtn" onAction="#refreshBtnHandler" text="Refresh"/>
         <Button fx:id="deleteAccountBtn" onAction="#deleteAccountHandler" text="Delete Account"/>
         <Button fx:id="updateAccountBtn" onAction="#updateAccountHandler" text="Update Account"/>
