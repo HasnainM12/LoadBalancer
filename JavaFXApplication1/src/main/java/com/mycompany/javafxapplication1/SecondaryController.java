@@ -315,7 +315,7 @@ public class SecondaryController {
         fileTableView.getColumns().addAll(idCol, nameCol, ownerCol);
         refreshFileList();
     }
-
+    
     private void setupUserTable() {
         dataTableView.getColumns().clear();
         
@@ -332,6 +332,7 @@ public class SecondaryController {
     public void initialise(String[] credentials) {
         if (!checkSession()) return;
         userTextField.setText(credentials[0]);
+        userTextField.setEditable(false); 
         setupTables();
     }
 
