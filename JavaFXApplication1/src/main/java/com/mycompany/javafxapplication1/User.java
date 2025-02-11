@@ -29,6 +29,10 @@ public class User {
         this.user.set(user);
     }
 
+    public SimpleStringProperty userProperty() {
+        return user;
+    }
+
     public String getPass() {
         return pass.get();
     }
@@ -43,5 +47,9 @@ public class User {
 
     public void setRole(String role) {
         this.role.set(role);
+    }
+
+    public SimpleStringProperty roleProperty() {
+        return role;
     }
 }

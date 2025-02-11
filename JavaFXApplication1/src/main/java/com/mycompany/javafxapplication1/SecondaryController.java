@@ -59,25 +59,6 @@ public class SecondaryController {
     }
 
     @FXML
-    private void promoteToAdminHandler(ActionEvent event) {
-        System.out.println("[INFO] Promote to Admin button clicked!");
-
-        TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Promote User to Admin");
-        dialog.setHeaderText("Enter the username to promote:");
-        Optional<String> username = dialog.showAndWait();
-
-        if (username.isPresent() && !username.get().isBlank()) {
-            if (userDB.promoteToAdmin(username.get())) {
-                showSuccess("User " + username.get() + " is now an admin.");
-            } else {
-                showError("Failed to promote user.");
-            }
-        }
-    }
-
-
-    @FXML
     private void handleUpload() {
         FileChooser fileChooser = new FileChooser();
         File file = fileChooser.showOpenDialog(null);
@@ -261,32 +242,33 @@ public class SecondaryController {
     }
 
 
-
     @FXML
-    private void promoteToAdminHandler() {
+    private void promoteToAdminHandler(ActionEvent event) {
+        System.out.println("[INFO] Promote to Admin button clicked!");
+    
         if (!session.isAdmin()) {
             showError("Admin privileges required");
             return;
         }
-
+    
         User selectedUser = dataTableView.getSelectionModel().getSelectedItem();
         if (selectedUser == null) {
-            showError("Please select a user");
+            showError("Please select a user to promote.");
             return;
         }
-
+    
         try {
             if (userDB.promoteToAdmin(selectedUser.getUser())) {
                 refreshUserList();
-                showSuccess("User promoted to admin");
+                showSuccess("User " + selectedUser.getUser() + " is now an admin.");
             } else {
-                showError("Failed to promote user");
+                showError("Failed to promote user.");
             }
         } catch (Exception e) {
             showError("Promotion error: " + e.getMessage());
         }
     }
-
+    
     @FXML
     private void switchToPrimary() {
         try {
