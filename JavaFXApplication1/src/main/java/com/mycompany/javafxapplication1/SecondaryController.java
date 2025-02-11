@@ -13,6 +13,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import java.io.File;
 import java.util.Optional;
+import javafx.event.ActionEvent;
+import java.io.IOException;
+
 
 public class SecondaryController {
     @FXML private TextField userTextField;
@@ -36,6 +39,43 @@ public class SecondaryController {
         fileDB = new FileDB();
         session = Session.getInstance();
     }
+    
+    @FXML
+    private void openTerminal(ActionEvent event) {
+        System.out.println("[INFO] Opening Terminal...");
+
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("terminal.fxml"));
+            Parent root = loader.load();
+
+            Stage terminalStage = new Stage();
+            terminalStage.setTitle("Terminal");
+            terminalStage.setScene(new Scene(root, 800, 600));
+            terminalStage.show();
+        } catch (IOException e) {
+            System.err.println("[ERROR] Failed to open Terminal: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
+    private void promoteToAdminHandler(ActionEvent event) {
+        System.out.println("[INFO] Promote to Admin button clicked!");
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Promote User to Admin");
+        dialog.setHeaderText("Enter the username to promote:");
+        Optional<String> username = dialog.showAndWait();
+
+        if (username.isPresent() && !username.get().isBlank()) {
+            if (userDB.promoteToAdmin(username.get())) {
+                showSuccess("User " + username.get() + " is now an admin.");
+            } else {
+                showError("Failed to promote user.");
+            }
+        }
+    }
+
 
     @FXML
     private void handleUpload() {
@@ -63,6 +103,8 @@ public class SecondaryController {
             }
         }
     }
+    
+
 
     private String readFileContent(File file) throws Exception {
         return new String(java.nio.file.Files.readAllBytes(file.toPath()));
@@ -97,6 +139,28 @@ public class SecondaryController {
             }
         }
     }
+    
+    
+    @FXML
+    private void handleEditFile(ActionEvent event) {
+        System.out.println("[INFO] Edit File button clicked!");
+
+        try {
+            // Load the File Editor FXML
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("file-editor.fxml"));
+            Parent root = loader.load();
+
+            // Create a new stage for the file editor
+            Stage fileEditorStage = new Stage();
+            fileEditorStage.setTitle("File Editor");
+            fileEditorStage.setScene(new Scene(root, 600, 400));
+            fileEditorStage.show();
+        } catch (IOException e) {
+            System.err.println("[ERROR] Failed to open File Editor: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
 
     @FXML
     private void handleShare() {
@@ -122,6 +186,14 @@ public class SecondaryController {
             showError("Error opening share dialog: " + e.getMessage());
         }
     }
+
+    @FXML
+    private void refreshBtnHandler(ActionEvent event) {
+        System.out.println("[INFO] Refreshing file list...");
+        fileTableView.getItems().clear();
+        fileTableView.getItems().addAll(new FileDB().getUserFiles(session.getUsername()));
+    }
+
 
     @FXML
     private void updateAccountHandler() {
@@ -150,7 +222,9 @@ public class SecondaryController {
     }
 
     @FXML
-    private void deleteAccountHandler() {
+    private void deleteAccountHandler(ActionEvent event) {
+        System.out.println("[INFO] Delete Account button clicked!");
+
         User selectedUser = dataTableView.getSelectionModel().getSelectedItem();
         if (selectedUser == null) {
             showError("Please select a user");
@@ -163,13 +237,15 @@ public class SecondaryController {
             return;
         }
 
-        Optional<ButtonType> result = showConfirmation("Delete Account", 
+        Optional<ButtonType> result = showConfirmation("Delete Account",
             "Are you sure you want to delete this account?");
-            
+
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
                 if (userDB.deleteUser(targetUser)) {
                     if (targetUser.equals(session.getUsername())) {
+                        session.clearSession();
+                        System.out.println("[INFO] Account deleted. Returning to login.");
                         switchToPrimary();
                     } else {
                         refreshUserList();
@@ -183,6 +259,8 @@ public class SecondaryController {
             }
         }
     }
+
+
 
     @FXML
     private void promoteToAdminHandler() {
