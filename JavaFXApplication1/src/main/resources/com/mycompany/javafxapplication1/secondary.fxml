@@ -11,7 +11,7 @@
     </padding>
 
     <Label text="Users List" />
-    <TextField fx:id="userTextField" maxWidth="300" />
+    <TextField fx:id="userTextField" maxWidth="300" editable="false" />
 
     <!-- Expanded User List -->
     <VBox spacing="10" VBox.vgrow="ALWAYS">
