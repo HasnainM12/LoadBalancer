@@ -10,6 +10,7 @@ import javafx.stage.Stage;
 import java.io.File;
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
 public class App extends Application {
@@ -24,7 +25,9 @@ public class App extends Application {
     }
 
     private void initialiseSystem(Stage stage) {
-        Connection conn = null;
+        Connection mysqlConn = null;
+        Connection sqliteConn = null;
+    
         try {
             System.out.println("Creating storage directory...");
             File storageDir = new File("storage");
@@ -40,44 +43,77 @@ public class App extends Application {
                 }
             }
     
-            System.out.println("Initialising databases...");
+            System.out.println("[INFO] Ensuring databases exist...");
+    
+            // Ensure SQLite database file exists
+            File sqliteFile = new File("databases/comp20081.db");
+            if (!sqliteFile.getParentFile().exists()) {
+                sqliteFile.getParentFile().mkdirs();  // Ensure parent directory exists
+            }
+            if (!sqliteFile.exists()) {
+                System.out.println("[INFO] SQLite database missing. Creating a new one...");
+                sqliteFile.createNewFile();
+            }
+    
+            System.out.println("[INFO] Initialising database connections...");
+    
             LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
             FileDB fileDB = new FileDB();
             UserDB userDB = new UserDB();
             SessionDB sessionDB = new SessionDB();
     
-            conn = DBConnection.getMySQLConnection();
-            if (conn == null) {
-                throw new SQLException("Failed to establish database connection");
+            // Ensure MySQL database exists
+            mysqlConn = DBConnection.getMySQLConnection();
+            if (mysqlConn == null) {
+                throw new SQLException("Failed to establish MySQL database connection.");
             }
     
-            System.out.println("Creating tables...");
-            loadBalancerDB.createStorageContainersTable(conn);
-            userDB.createUserTable(conn);
-            fileDB.createFileTable(conn);
-            fileDB.createFilePermissionsTable(conn);
+            try (PreparedStatement stmt = mysqlConn.prepareStatement("CREATE DATABASE IF NOT EXISTS comp20081")) {
+                stmt.executeUpdate();
+                System.out.println("[INFO] Ensured MySQL database exists.");
+            }
+    
+            System.out.println("[INFO] Creating tables...");
+    
+            // Create Tables for MySQL
+            loadBalancerDB.createStorageContainersTable(mysqlConn);
+            userDB.createUserTable(mysqlConn);
+            fileDB.createFileTable(mysqlConn);
+            fileDB.createFilePermissionsTable(mysqlConn);
+    
+            // Ensure SQLite tables exist
+            sqliteConn = DBConnection.getSQLiteConnection();
+            sessionDB.createSessionTable(); // Only exists in SQLite
     
             // Initialise storage containers in database
             for (int i = 1; i <= 4; i++) {
-                loadBalancerDB.addStorageContainer("container" + i, conn);
+                loadBalancerDB.addStorageContainer("container" + i, mysqlConn);
             }
     
-            System.out.println("Initialising services...");
+            System.out.println("[INFO] Initialising services...");
             LoadBalancer.getInstance();
     
-            System.out.println("Showing primary stage...");
+            System.out.println("[INFO] Showing primary stage...");
             showPrimaryStage(stage);
     
         } catch (Exception ex) {
-            System.err.println("Failed to initialise system: " + ex.getMessage());
+            System.err.println("[ERROR] Failed to initialise system: " + ex.getMessage());
             ex.printStackTrace();
             throw new RuntimeException("Failed to initialise system", ex);
         } finally {
-            if (conn != null) {
-                DBConnection.releaseConnection(conn);
+            if (mysqlConn != null) {
+                DBConnection.releaseConnection(mysqlConn);
+            }
+            if (sqliteConn != null) {
+                try {
+                    sqliteConn.close();
+                } catch (SQLException e) {
+                    System.err.println("[ERROR] Failed to close SQLite connection: " + e.getMessage());
+                }
             }
         }
     }
+    
     
     private void showPrimaryStage(Stage stage) throws IOException {
         try {

@@ -1,10 +1,13 @@
 package com.mycompany.javafxapplication1;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.io.File;
 
 public class DBConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:databases/comp20081.db";
@@ -27,6 +30,23 @@ public class DBConnection {
     }
 
     public static Connection getSQLiteConnection() throws SQLException {
+        File dbFile = new File("databases/comp20081.db");
+
+        // Ensure directory exists
+        if (!dbFile.getParentFile().exists()) {
+            dbFile.getParentFile().mkdirs();
+        }
+
+        // If database file is missing, create it
+        if (!dbFile.exists()) {
+            System.out.println("[INFO] SQLite database missing. Creating a new one...");
+            try {
+                dbFile.createNewFile();
+            } catch (IOException e) {
+                throw new RuntimeException("[ERROR] Failed to create SQLite database file: " + e.getMessage());
+            }
+        }
+
         return DriverManager.getConnection(SQLITE_URL);
     }
 
@@ -35,17 +55,16 @@ public class DBConnection {
     }
 
     public static Connection getMySQLConnection() throws SQLException {
-        try {
-            Connection conn = mysqlPool.poll();
-            if (conn == null || conn.isClosed()) {
-                conn = createNewMySQLConnection();
-            }
-            return conn;
-        } catch (SQLException e) {
-            System.err.println("MySQL connection failed: " + e.getMessage());
-            throw e;
+        Connection conn = DriverManager.getConnection(MYSQL_URL, MYSQL_USER, MYSQL_PASSWORD);
+        
+        try (PreparedStatement stmt = conn.prepareStatement("CREATE DATABASE IF NOT EXISTS comp20081")) {
+            stmt.executeUpdate();
+            System.out.println("[INFO] Checked and ensured MySQL database exists.");
         }
+
+        return conn;
     }
+
 
     public static void releaseConnection(Connection conn) {
         if (conn != null) {
