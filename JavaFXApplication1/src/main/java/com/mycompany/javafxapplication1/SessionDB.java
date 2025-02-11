@@ -18,11 +18,12 @@ public class SessionDB {
         try (Connection conn = DBConnection.getSQLiteConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
+            System.out.println("[INFO] Successfully created/verified Sessions table in SQLite.");
         } catch (SQLException e) {
-            System.err.println("Error creating session table: " + e.getMessage());
+            System.err.println("[ERROR] Failed to create Sessions table: " + e.getMessage());
         }
     }
-
+    
     public void saveSession(String username, String role) {
         String query = "INSERT INTO Sessions (username, user_role, last_activity) VALUES (?, ?, ?)";
         try (Connection conn = DBConnection.getSQLiteConnection();

@@ -80,10 +80,13 @@ public class App extends Application {
             userDB.createUserTable(mysqlConn);
             fileDB.createFileTable(mysqlConn);
             fileDB.createFilePermissionsTable(mysqlConn);
+
     
             // Ensure SQLite tables exist
+            System.out.println("[INFO] Ensuring SQLite tables exist...");
             sqliteConn = DBConnection.getSQLiteConnection();
-            sessionDB.createSessionTable(); // Only exists in SQLite
+            sessionDB.createSessionTable();  // ✅ Ensures Sessions table exists
+            System.out.println("[INFO] SQLite session table checked/created.");
     
             // Initialise storage containers in database
             for (int i = 1; i <= 4; i++) {
