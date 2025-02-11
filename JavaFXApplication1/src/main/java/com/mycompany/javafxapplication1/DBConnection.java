@@ -37,16 +37,6 @@ public class DBConnection {
             dbFile.getParentFile().mkdirs();
         }
 
-        // If database file is missing, create it
-        if (!dbFile.exists()) {
-            System.out.println("[INFO] SQLite database missing. Creating a new one...");
-            try {
-                dbFile.createNewFile();
-            } catch (IOException e) {
-                throw new RuntimeException("[ERROR] Failed to create SQLite database file: " + e.getMessage());
-            }
-        }
-
         return DriverManager.getConnection(SQLITE_URL);
     }
 

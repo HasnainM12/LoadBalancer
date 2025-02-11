@@ -16,7 +16,7 @@ import java.sql.SQLException;
 public class App extends Application {
     @Override
     public void start(Stage stage) throws IOException {
-        Platform.startup(() -> initialiseSystem(stage));
+        initialiseSystem(stage);
     
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             System.err.println("Uncaught error: " + throwable);
@@ -50,11 +50,7 @@ public class App extends Application {
             if (!sqliteFile.getParentFile().exists()) {
                 sqliteFile.getParentFile().mkdirs();  // Ensure parent directory exists
             }
-            if (!sqliteFile.exists()) {
-                System.out.println("[INFO] SQLite database missing. Creating a new one...");
-                sqliteFile.createNewFile();
-            }
-    
+
             System.out.println("[INFO] Initialising database connections...");
     
             LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
