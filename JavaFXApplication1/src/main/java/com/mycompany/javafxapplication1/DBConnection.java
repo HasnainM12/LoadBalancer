@@ -13,7 +13,7 @@ public class DBConnection {
     private static final String SQLITE_URL = "jdbc:sqlite:databases/comp20081.db";
     private static final String MYSQL_URL = "jdbc:mysql://lamp-server:3307/comp20081";
     private static final String MYSQL_USER = "admin";
-    private static final String MYSQL_PASSWORD = "UcERH5IilWkK";
+    private static final String MYSQL_PASSWORD = "hFmMBpg8952e";
     
     private static final int MAX_POOL_SIZE = 10;
     private static final BlockingQueue<Connection> mysqlPool = new ArrayBlockingQueue<>(MAX_POOL_SIZE);

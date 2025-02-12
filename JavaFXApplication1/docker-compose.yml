@@ -70,11 +70,12 @@ services:
       - "8080:80"    # Apache Web Server
       - "3307:3306"  # MySQL Server
     volumes:
-      - lamp_data:/app    # Persistent storage
+      - lamp_data:/app    # Persistent storage for Apache
+      - ./mysql:/var/lib/mysql  # ✅ Persistent MySQL storage using local `mysql/` folder
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_USER: admin
-      MYSQL_PASSWORD: UcERH5IilWkK
+      MYSQL_PASSWORD: hFmMBpg8952e
       MYSQL_DATABASE: comp20081
     networks:
       - comp20081_network
@@ -85,7 +86,7 @@ volumes:
   files2_data:
   files3_data:
   files4_data:
-  lamp_data:  # Replacing mysql_data
+  lamp_data:
 
 networks:
   comp20081_network:
