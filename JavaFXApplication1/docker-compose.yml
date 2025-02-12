@@ -68,7 +68,7 @@ services:
     image: mattrayner/lamp:latest-1804
     ports:
       - "8080:80"    # Apache Web Server
-      - "3307:3306"  # MySQL Server
+      - "3306:3306"  # MySQL Server
     volumes:
       - lamp_data:/app    # Persistent storage for Apache
       - ./mysql:/var/lib/mysql  # ✅ Persistent MySQL storage using local `mysql/` folder
