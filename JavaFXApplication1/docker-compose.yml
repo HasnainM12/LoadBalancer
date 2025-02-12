@@ -74,7 +74,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_USER: admin
-      MYSQL_PASSWORD: 0me3s9eRuXqi
+      MYSQL_PASSWORD: UcERH5IilWkK
       MYSQL_DATABASE: comp20081
     networks:
       - comp20081_network
