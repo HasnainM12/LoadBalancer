@@ -87,10 +87,11 @@ public class App extends Application {
             System.out.println("[INFO] SQLite session table checked/created.");
     
             // Initialise storage containers in database
+            // Initialise storage containers in database with a default total capacity (e.g., 1000)
             for (int i = 1; i <= 4; i++) {
-                loadBalancerDB.addStorageContainer("container" + i, mysqlConn);
+                loadBalancerDB.addStorageContainer("container" + i, 1000, mysqlConn);
             }
-    
+
             System.out.println("[INFO] Initialising services...");
             LoadBalancer.getInstance();
     
