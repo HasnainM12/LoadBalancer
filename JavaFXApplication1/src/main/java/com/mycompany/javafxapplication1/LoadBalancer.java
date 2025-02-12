@@ -5,6 +5,8 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 
+import org.eclipse.paho.client.mqttv3.MqttException;
+
 public class LoadBalancer {
     private static LoadBalancer instance;
     private final Queue<FileOperation> requestQueue;
@@ -14,6 +16,8 @@ public class LoadBalancer {
     private final ExecutorService executorService;
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
     private final SystemLogger logger = SystemLogger.getInstance();
+    private final MQTTClient mqttClient;
+
     
     public enum SchedulingAlgorithm {
         FCFS, SJN, ROUND_ROBIN
@@ -27,8 +31,11 @@ public class LoadBalancer {
         executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         initializeContainers();
         startRequestProcessor();
+        mqttClient = new MQTTClient();
+        mqttClient.subscribeToTopic("loadbalancer/processing", this);
+        mqttClient.subscribeToTopic("loadbalancer/completed", this);
     }
-    
+
     public static LoadBalancer getInstance() {
         if (instance == null) {
             synchronized(LoadBalancer.class) {
@@ -38,6 +45,28 @@ public class LoadBalancer {
             }
         }
         return instance;
+    }
+
+    public void submitTask(FileOperation operation) {
+        String taskJson = String.format("{\"task_id\": \"%s\", \"type\": \"%s\", \"file\": \"%s\"}",
+                UUID.randomUUID(), operation.getType(), operation.getFilename());
+
+        System.out.println("[LoadBalancer] Publishing task: " + taskJson);
+        mqttClient.publishMessage("loadbalancer/waiting", taskJson);
+    }
+
+    public void handleMessage(String topic, String message) {
+        switch (topic) {
+            case "loadbalancer/processing":
+                System.out.println("[LoadBalancer] Task is now processing: " + message);
+                break;
+            case "loadbalancer/completed":
+                System.out.println("[LoadBalancer] Task completed: " + message);
+                break;
+            default:
+                System.out.println("[LoadBalancer] Received unknown topic: " + topic);
+                break;
+        }
     }
 
     private void initializeContainers() {
