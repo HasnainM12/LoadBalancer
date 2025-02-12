@@ -5,7 +5,6 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
-
 import org.eclipse.paho.client.mqttv3.MqttException;
 
 public class LoadBalancer {

@@ -1,6 +1,5 @@
 package com.mycompany.javafxapplication1;
 
-import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
