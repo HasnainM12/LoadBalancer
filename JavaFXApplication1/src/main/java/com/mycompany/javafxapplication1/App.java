@@ -72,7 +72,9 @@ public class App extends Application {
             System.out.println("[INFO] Creating tables...");
     
             // Create Tables for MySQL
+           
             loadBalancerDB.createStorageContainersTable(mysqlConn);
+            loadBalancerDB.createTaskHistoryTable(mysqlConn);
             userDB.createUserTable(mysqlConn);
             fileDB.createFileTable(mysqlConn);
             fileDB.createFilePermissionsTable(mysqlConn);

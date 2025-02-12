@@ -1,6 +1,7 @@
 package com.mycompany.javafxapplication1;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
@@ -17,7 +18,10 @@ public class LoadBalancer {
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
     private final SystemLogger logger = SystemLogger.getInstance();
     private final MQTTClient mqttClient;
-
+    private final Map<String, String> taskStates = new ConcurrentHashMap<>();
+    private final Map<String, Integer> workerLoad = new ConcurrentHashMap<>();
+    private int roundRobinIndex = 0;
+    private final Map<String, Long> taskProcessingTimestamps = new ConcurrentHashMap<>();
     
     public enum SchedulingAlgorithm {
         FCFS, SJN, ROUND_ROBIN
@@ -34,6 +38,10 @@ public class LoadBalancer {
         mqttClient = new MQTTClient();
         mqttClient.subscribeToTopic("loadbalancer/processing", this);
         mqttClient.subscribeToTopic("loadbalancer/completed", this);
+        mqttClient.subscribeToTopic("loadbalancer/task/complete", this);
+        startTaskMonitor();
+
+
     }
 
     public static LoadBalancer getInstance() {
@@ -47,28 +55,179 @@ public class LoadBalancer {
         return instance;
     }
 
-    public void submitTask(FileOperation operation) {
-        String taskJson = String.format("{\"task_id\": \"%s\", \"type\": \"%s\", \"file\": \"%s\"}",
-                UUID.randomUUID(), operation.getType(), operation.getFilename());
+    private void startTaskMonitor() {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.scheduleAtFixedRate(this::checkForStuckTasks, 10, 10, TimeUnit.SECONDS);
+    }
+    
 
-        System.out.println("[LoadBalancer] Publishing task: " + taskJson);
+    public void submitTask(FileOperation operation) {
+        String taskId = UUID.randomUUID().toString();
+        String worker = getNextWorker();
+    
+        if (worker == null) {
+            System.out.println("[LoadBalancer] No available workers!");
+            return;
+        }
+    
+        String taskJson = String.format("{\"task_id\": \"%s\", \"worker\": \"%s\", \"type\": \"%s\", \"file\": \"%s\"}",
+                taskId, worker, operation.getType(), operation.getFilename());
+    
+        taskStates.put(taskId, "waiting");
+        workerLoad.put(worker, workerLoad.getOrDefault(worker, 0) + 1); // Increase worker load
+    
+        System.out.println("[INFO] Task " + taskId + " assigned to " + worker); // Assigns task to a worker
         mqttClient.publishMessage("loadbalancer/waiting", taskJson);
     }
 
+    private String getFirstAvailableWorker() {
+        return storageContainers.get(0);
+    }
+
+    private String getLeastLoadedWorker() {
+        return storageContainers.stream()
+            .min(Comparator.comparingInt(workerLoad::get))
+            .orElse(storageContainers.get(0));
+    }
+    
+    private synchronized String getNextRoundRobinWorker() {
+        String worker = storageContainers.get(roundRobinIndex);
+        roundRobinIndex = (roundRobinIndex + 1) % storageContainers.size();
+        return worker;
+    }
+    
+    
+
+    private String getNextWorker() {
+        if (storageContainers.isEmpty()) return null;
+    
+        switch (schedulingAlgorithm) {
+            case FCFS:
+                return getFirstAvailableWorker();
+            case SJN:
+                return getLeastLoadedWorker();
+            case ROUND_ROBIN:
+                return getNextRoundRobinWorker();
+            default:
+                return getFirstAvailableWorker();
+        }
+    }
+        
     public void handleMessage(String topic, String message) {
         switch (topic) {
             case "loadbalancer/processing":
-                System.out.println("[LoadBalancer] Task is now processing: " + message);
+                markTaskAsProcessing(message);
                 break;
             case "loadbalancer/completed":
-                System.out.println("[LoadBalancer] Task completed: " + message);
+                markTaskAsCompleted(message);
+                break;
+            case "loadbalancer/task/complete":
+                System.out.println("[LoadBalancer] Task completion notification received: " + message);
                 break;
             default:
                 System.out.println("[LoadBalancer] Received unknown topic: " + topic);
                 break;
         }
     }
+    
 
+    private String extractTaskId(String message) {
+        try {
+            return message.split("\"task_id\":\\s*\"")[1].split("\"")[0];
+        } catch (Exception e) {
+            System.err.println("[ERROR] Failed to extract task ID: " + message);
+            return null;
+        }
+    }
+
+    private String extractWorkerId(String message) {
+        try {
+            return message.split("\"worker\":\\s*\"")[1].split("\"")[0];
+        } catch (Exception e) {
+            System.err.println("[ERROR] Failed to extract worker ID: " + message);
+            return null;
+        }
+    }
+
+    private void markTaskAsProcessing(String message) {
+        String taskId = extractTaskId(message);
+        String worker = extractWorkerId(message);
+        if (taskId != null && taskStates.containsKey(taskId)) {
+            taskStates.put(taskId, "processing");
+            taskProcessingTimestamps.put(taskId, System.currentTimeMillis());
+    
+            // ✅ Log task start in the database
+            logTaskHistory(taskId, worker, "PROCESSING");
+    
+            System.out.println("[LoadBalancer] Task is now processing: " + taskId);
+        }
+    }
+    
+
+    private void checkForStuckTasks() {
+        long currentTime = System.currentTimeMillis();
+        long timeout = 60_000; // 60 seconds timeout for stuck tasks
+    
+        for (String taskId : new HashSet<>(taskProcessingTimestamps.keySet())) {
+            long startTime = taskProcessingTimestamps.get(taskId);
+            if (currentTime - startTime > timeout) {
+                System.out.println("[WARNING] Task " + taskId + " is stuck. Reassigning...");
+    
+                // Reassign the task
+                reassignTask(taskId);
+            }
+        }
+    }
+
+    private void reassignTask(String taskId) {
+        String newWorker = getNextWorker();
+        if (newWorker == null) {
+            System.out.println("[ERROR] No available workers to reassign task: " + taskId);
+            return;
+        }
+    
+        // Construct a new task message
+        String reassignedTaskJson = String.format("{\"task_id\": \"%s\", \"worker\": \"%s\", \"status\": \"RETRY\"}",
+                taskId, newWorker);
+    
+        System.out.println("[LoadBalancer] Reassigning task " + taskId + " to " + newWorker);
+        mqttClient.publishMessage("loadbalancer/waiting", reassignedTaskJson);
+    
+        // Update worker load tracking
+        workerLoad.put(newWorker, workerLoad.getOrDefault(newWorker, 0) + 1);
+        taskProcessingTimestamps.put(taskId, System.currentTimeMillis()); // Reset timer
+    }
+    
+    private void markTaskAsCompleted(String message) {
+        String taskId = extractTaskId(message);
+        String worker = extractWorkerId(message);
+        if (taskId != null && taskStates.containsKey(taskId)) {
+            taskStates.remove(taskId);
+            taskProcessingTimestamps.remove(taskId);
+    
+            // ✅ Log task completion in the database
+            logTaskHistory(taskId, worker, "COMPLETED");
+    
+            System.out.println("[LoadBalancer] Task completed and removed: " + taskId);
+        }
+    }
+    
+    private void logTaskHistory(String taskId, String worker, String status) {
+        try (Connection conn = DBConnection.getMySQLConnection();
+            PreparedStatement stmt = conn.prepareStatement(
+                "INSERT INTO TaskHistory (task_id, worker, status) VALUES (?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE status = ?, timestamp = CURRENT_TIMESTAMP")) {
+            stmt.setString(1, taskId);
+            stmt.setString(2, worker);
+            stmt.setString(3, status);
+            stmt.setString(4, status);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Failed to log task history: " + e.getMessage());
+        }
+    }
+
+    
     private void initializeContainers() {
         try (Connection conn = DBConnection.getMySQLConnection()) {
             storageContainers.addAll(loadBalancerDB.getStorageContainers(conn));
