@@ -157,25 +157,33 @@ public class SecondaryController {
             showError("Please select a file to delete");
             return;
         }
-
-        Path filePath = Paths.get(fileDB.getFilePath(selectedFile.getId()));
-
-        if (!Files.exists(filePath)) {
+    
+        // ✅ Get file path from MySQL
+        String filePath = fileDB.getFilePath(selectedFile.getId());
+    
+        if (filePath == null || filePath.isEmpty()) {
+            showError("File metadata is missing!");
+            return;
+        }
+    
+        Path storagePath = Paths.get(filePath);
+    
+        if (!Files.exists(storagePath)) {
             showError("File not found in storage container!");
             return;
         }
-
+    
         Optional<ButtonType> result = showConfirmation("Delete File", 
             "Are you sure you want to delete " + selectedFile.getFilename() + "?");
-
+    
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
                 // ✅ Delete file from storage container
-                Files.delete(filePath);
+                Files.delete(storagePath);
                 
                 // ✅ Remove metadata from MySQL
                 fileDB.deleteFileMetadata(selectedFile.getId());
-
+    
                 showSuccess("File deleted successfully");
                 refreshFileList();
             } catch (IOException e) {
@@ -183,7 +191,7 @@ public class SecondaryController {
             }
         }
     }
-
+    
     
     @FXML
     private void handleEditFile(ActionEvent event) {
