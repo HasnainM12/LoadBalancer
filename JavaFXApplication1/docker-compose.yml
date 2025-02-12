@@ -67,14 +67,14 @@ services:
     container_name: comp20081-lamp
     image: mattrayner/lamp:latest-1804
     ports:
-      - "8081:80"    # Apache Web Server
+      - "8080:80"    # Apache Web Server
       - "3307:3306"  # MySQL Server
     volumes:
       - lamp_data:/app    # Persistent storage
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_USER: admin
-      MYSQL_PASSWORD: your_lamp_password
+      MYSQL_PASSWORD: 0me3s9eRuXqi
       MYSQL_DATABASE: comp20081
     networks:
       - comp20081_network
