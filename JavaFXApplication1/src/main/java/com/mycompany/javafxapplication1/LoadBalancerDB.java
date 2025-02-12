@@ -32,6 +32,18 @@ public class LoadBalancerDB {
         }
     }
 
+    public void createTaskHistoryTable(Connection conn) throws SQLException {
+        String query = "CREATE TABLE IF NOT EXISTS TaskHistory (" +
+                       "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
+                       "task_id VARCHAR(255) UNIQUE, " +
+                       "worker VARCHAR(255), " +
+                       "status VARCHAR(50), " +
+                       "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.executeUpdate();
+        }
+    }
+    
     public void addStorageContainer(String containerName, Connection conn) throws SQLException {
         if (containerExists(containerName, conn)) {
             return;
