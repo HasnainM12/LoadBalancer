@@ -98,7 +98,7 @@ public class LoadBalancer {
     
     
 
-    private String getNextWorker() {
+    public String getNextWorker() {
         if (storageContainers.isEmpty()) return null;
     
         switch (schedulingAlgorithm) {

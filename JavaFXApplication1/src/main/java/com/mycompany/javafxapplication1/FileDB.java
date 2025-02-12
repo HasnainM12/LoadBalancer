@@ -168,6 +168,57 @@ public class FileDB {
         }
     }
 
+    public Long addFileMetadata(String filename, String owner, String filePath) {
+        try (Connection conn = DBConnection.getMySQLConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                 "INSERT INTO Files (filename, owner, path) VALUES (?, ?, ?)",
+                 Statement.RETURN_GENERATED_KEYS)) {
+            stmt.setString(1, filename);
+            stmt.setString(2, owner);
+            stmt.setString(3, filePath);
+            stmt.executeUpdate();
+    
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Failed to store file metadata: " + e.getMessage());
+        }
+        return -1L;
+    }
+
+    public boolean deleteFileMetadata(Long fileId) {
+        try (Connection conn = DBConnection.getMySQLConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                 "DELETE FROM Files WHERE id = ?")) {
+            stmt.setLong(1, fileId);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Failed to delete file metadata: " + e.getMessage());
+            return false;
+        }
+    }
+    
+
+    public String getFilePath(Long fileId) {
+        try (Connection conn = DBConnection.getMySQLConnection();
+             PreparedStatement stmt = conn.prepareStatement(
+                 "SELECT path FROM Files WHERE id = ?")) {
+            stmt.setLong(1, fileId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("path");
+            }
+        } catch (SQLException e) {
+            System.err.println("[ERROR] Failed to retrieve file path: " + e.getMessage());
+        }
+        return null;
+    }
+    
+    
+
     public boolean deleteFile(Long fileId) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
             String query = "DELETE FROM Files WHERE id = ?";

@@ -15,6 +15,11 @@ import java.io.File;
 import java.util.Optional;
 import javafx.event.ActionEvent;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.Path;
+
 
 
 public class SecondaryController {
@@ -22,6 +27,7 @@ public class SecondaryController {
     @FXML private TableView<UserFile> fileTableView;
     @FXML private TableView<User> dataTableView;
     @FXML private Button secondaryButton;
+    @FXML private Button downloadButton;
     @FXML private Button uploadButton;
     @FXML private Button updateAccountBtn;
     @FXML private Button deleteAccountBtn;
@@ -69,21 +75,74 @@ public class SecondaryController {
                 
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
                 progressDialog.bindProgress(DelayManager.getInstance());
-                
-                Long fileId = fileDB.addFile(file.getName(), session.getUsername(), readFileContent(file));
+
+                // ✅ LoadBalancer selects a storage container
+                String selectedContainer = LoadBalancer.getInstance().getNextWorker();
+
+                if (selectedContainer == null) {
+                    showError("No available storage containers!");
+                    return;
+                }
+
+                // ✅ Save the file in the selected container
+                Path containerPath = Paths.get("storage", selectedContainer, file.getName());
+                Files.write(containerPath, readFileContent(file).getBytes());
+
+                // ✅ Store only metadata in MySQL
+                Long fileId = fileDB.addFileMetadata(file.getName(), session.getUsername(), containerPath.toString());
+
                 if (fileId != -1L) {
-                    showSuccess("File uploaded successfully");
+                    showSuccess("File uploaded successfully to " + selectedContainer);
                     refreshFileList();
                 } else {
                     showError("Failed to upload file");
                 }
-                
+
                 progressDialog.close();
             } catch (Exception e) {
                 showError("Upload error: " + e.getMessage());
             }
         }
     }
+
+    @FXML
+    private void handleDownload() {
+        UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
+        if (selectedFile == null) {
+            showError("Please select a file to download");
+            return;
+        }
+
+        // ✅ Get file path from MySQL
+        String filePath = fileDB.getFilePath(selectedFile.getId());
+
+        if (filePath == null || filePath.isEmpty()) {
+            showError("File metadata not found in database!");
+            return;
+        }
+
+        Path storagePath = Paths.get(filePath);
+
+        if (!Files.exists(storagePath)) {
+            showError("File not found in storage container!");
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setInitialFileName(selectedFile.getFilename());
+        File saveFile = fileChooser.showSaveDialog(null);
+
+        if (saveFile != null) {
+            try {
+                Files.copy(storagePath, saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                showSuccess("File downloaded successfully!");
+            } catch (IOException e) {
+                showError("Download error: " + e.getMessage());
+            }
+        }
+    }
+
+
     
 
 
@@ -99,28 +158,32 @@ public class SecondaryController {
             return;
         }
 
-        if (!selectedFile.getOwner().equals(session.getUsername()) && !session.isAdmin()) {
-            showError("You can only delete your own files");
+        Path filePath = Paths.get(fileDB.getFilePath(selectedFile.getId()));
+
+        if (!Files.exists(filePath)) {
+            showError("File not found in storage container!");
             return;
         }
 
         Optional<ButtonType> result = showConfirmation("Delete File", 
             "Are you sure you want to delete " + selectedFile.getFilename() + "?");
-            
+
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
-                if (fileDB.deleteFile(selectedFile.getId())) {
-                    refreshFileList();
-                    showSuccess("File deleted successfully");
-                } else {
-                    showError("Failed to delete file");
-                }
-            } catch (Exception e) {
-                showError("Delete error: " + e.getMessage());
+                // ✅ Delete file from storage container
+                Files.delete(filePath);
+                
+                // ✅ Remove metadata from MySQL
+                fileDB.deleteFileMetadata(selectedFile.getId());
+
+                showSuccess("File deleted successfully");
+                refreshFileList();
+            } catch (IOException e) {
+                showError("Failed to delete file: " + e.getMessage());
             }
         }
     }
-    
+
     
     @FXML
     private void handleEditFile(ActionEvent event) {

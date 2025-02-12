@@ -27,6 +27,7 @@
 
     <VBox spacing="10">
         <HBox spacing="10" alignment="CENTER">
+            <Button fx:id="downloadButton" onAction="#handleDownload" text="Download File"/>
             <Button fx:id="uploadButton" onAction="#handleUpload" text="Upload File"/>
             <Button fx:id="deleteButton" onAction="#handleDelete" text="Delete File"/>
             <Button fx:id="shareButton" onAction="#handleShare" text="Share"/>
