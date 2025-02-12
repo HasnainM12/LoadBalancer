@@ -1,3 +1,4 @@
+
 services:
   main-container:
     container_name: comp20081-main
@@ -17,6 +18,8 @@ services:
     image: pedrombmachado/ntu_lubuntu:comp20081
     ports:
       - "4847:22"
+    depends_on:
+      - lamp-server
     networks:
       - comp20081_network
 
@@ -60,18 +63,19 @@ services:
     networks:
       - comp20081_network
 
-  mysql:
-    container_name: comp20081-mysql
-    image: mysql:8.0
+  lamp-server:
+    container_name: comp20081-lamp
+    image: mattrayner/lamp:latest-1804
+    ports:
+      - "8081:80"    # Apache Web Server
+      - "3307:3306"  # MySQL Server
+    volumes:
+      - lamp_data:/app    # Persistent storage
     environment:
       MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: your_lamp_password
       MYSQL_DATABASE: comp20081
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-    ports:
-      - "3307:3306"
-    volumes:
-      - ./databases/mysql:/var/lib/mysql
     networks:
       - comp20081_network
 
@@ -81,7 +85,7 @@ volumes:
   files2_data:
   files3_data:
   files4_data:
-  mysql_data:
+  lamp_data:  # Replacing mysql_data
 
 networks:
   comp20081_network:
