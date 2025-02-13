@@ -81,8 +81,8 @@ public class SecondaryController {
                 // ✅ Delegate upload task to LoadBalancer
                 LoadBalancer.getInstance().submitTask(
                     new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
+                    .setFilePath(file.getAbsolutePath())
                 );
-    
                 showSuccess("Upload request submitted.");
                 progressDialog.close();
     
