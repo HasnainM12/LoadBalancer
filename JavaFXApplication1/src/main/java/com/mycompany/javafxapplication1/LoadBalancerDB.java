@@ -27,8 +27,8 @@ public class LoadBalancerDB {
             // Then create OperationsLog with the foreign key
             String operationsQuery = "CREATE TABLE IF NOT EXISTS OperationsLog (" +
                     "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                    "container_name VARCHAR(255), NOT NULL" +
-                    "operation_type VARCHAR(255), NOT NULL" +
+                    "container_name VARCHAR(255) NOT NULL, " +
+                    "operation_type VARCHAR(255) NOT NULL, " +
                     "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, " +
                     "FOREIGN KEY (container_name) REFERENCES StorageContainers(container_name)" +
                     ") ENGINE=InnoDB";

@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.*;
 import java.util.Base64;
+import java.util.List;
 
 
 
@@ -77,24 +78,44 @@ public class FileDB {
 
     public ObservableList<UserFile> getUserFiles(String username) {
         ObservableList<UserFile> files = FXCollections.observableArrayList();
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                "SELECT id, filename, owner, path FROM Files WHERE owner = ?")) {
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-            while (rs.next()) {
-                files.add(new UserFile(
-                    rs.getLong("id"),
-                    rs.getString("filename"),
-                    rs.getString("owner"),
-                    rs.getString("path")
-                ));
+        
+        try (Connection conn = DBConnection.getMySQLConnection()) {
+            // First get all storage containers
+            LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
+            List<String> containers = loadBalancerDB.getStorageContainers(conn);
+            
+            // Query both owned files and files shared with the user
+            String query = "SELECT DISTINCT f.id, f.filename, f.owner, f.path " +
+                        "FROM Files f " +
+                        "LEFT JOIN FilePermissions fp ON f.id = fp.file_id " +
+                        "WHERE f.owner = ? OR (fp.user_id = ? AND fp.can_read = true)";
+                        
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, username);
+                stmt.setString(2, username);
+                
+                ResultSet rs = stmt.executeQuery();
+                while (rs.next()) {
+                    Long id = rs.getLong("id");
+                    String filename = rs.getString("filename");
+                    String owner = rs.getString("owner");
+                    
+                    // Check all containers for the file
+                    for (String container : containers) {
+                        Path containerPath = Paths.get("storage", container, filename);
+                        if (Files.exists(containerPath)) {
+                            files.add(new UserFile(id, filename, owner, containerPath.toString()));
+                            break;
+                        }
+                    }
+                }
             }
         } catch (SQLException e) {
             logger.log(SystemLogger.LogLevel.ERROR, "Error retrieving user files: " + e.getMessage());
         }
+        
         return files;
-    }
+}
 
     public Long addFileMetadata(String filename, String owner, String filePath) {
         try (Connection conn = DBConnection.getMySQLConnection();
