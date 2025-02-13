@@ -16,52 +16,32 @@ public class LoadBalancerDB {
      * and OperationsLog has a foreign key referencing it.
      */
     public void createStorageContainersTable(Connection conn) throws SQLException {
-        // Create the StorageContainers table based on your SQL script
-        String storageQuery = "CREATE TABLE IF NOT EXISTS StorageContainers (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                "container_name VARCHAR(255) NOT NULL UNIQUE, " +
-                "total_capacity BIGINT NOT NULL, " +
-                "used_capacity BIGINT NOT NULL DEFAULT 0" +
-                ") ENGINE=InnoDB";
-
-        // Create the OperationsLog table that will reference StorageContainers
-        String operationsQuery = "CREATE TABLE IF NOT EXISTS OperationsLog (" +
-                "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                "container_name VARCHAR(255), " +
-                "operation_type VARCHAR(255), " +
-                "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
-                ") ENGINE=InnoDB";
-
-        // Add the foreign key constraint so that OperationsLog.container_name
-        // references StorageContainers.container_name
-        String alterQuery = "ALTER TABLE OperationsLog " +
-                "ADD CONSTRAINT fk_container_name " +
-                "FOREIGN KEY (container_name) REFERENCES StorageContainers(container_name)";
-
-        String checkConstraintQuery = "SELECT COUNT(*) " +
-                "FROM information_schema.TABLE_CONSTRAINTS " +
-                "WHERE CONSTRAINT_NAME = 'fk_container_name' " +
-                "AND TABLE_NAME = 'OperationsLog' " +
-                "AND TABLE_SCHEMA = DATABASE()";
-
-        try (PreparedStatement checkStmt = conn.prepareStatement(checkConstraintQuery)) {
-            ResultSet rs = checkStmt.executeQuery();
-            if (rs.next() && rs.getInt(1) == 0) {
-                // Constraint does not exist, so add it.
-                try (PreparedStatement alterStmt = conn.prepareStatement(alterQuery)) {
-                    alterStmt.executeUpdate();
-                }
+        // Create StorageContainers first
+            String storageQuery = "CREATE TABLE IF NOT EXISTS StorageContainers (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                    "container_name VARCHAR(255) NOT NULL UNIQUE, " +
+                    "total_capacity BIGINT NOT NULL, " +
+                    "used_capacity BIGINT NOT NULL DEFAULT 0" +
+                    ") ENGINE=InnoDB";
+    
+            // Then create OperationsLog with the foreign key
+            String operationsQuery = "CREATE TABLE IF NOT EXISTS OperationsLog (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                    "container_name VARCHAR(255), NOT NULL" +
+                    "operation_type VARCHAR(255), NOT NULL" +
+                    "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, " +
+                    "FOREIGN KEY (container_name) REFERENCES StorageContainers(container_name)" +
+                    ") ENGINE=InnoDB";
+    
+            // Execute table creation
+            try (PreparedStatement storageStmt = conn.prepareStatement(storageQuery);
+                 PreparedStatement operationsStmt = conn.prepareStatement(operationsQuery)) {
+                storageStmt.executeUpdate();
+                operationsStmt.executeUpdate();
             }
         }
-
-        try (PreparedStatement storageStmt = conn.prepareStatement(storageQuery);
-             PreparedStatement operationsStmt = conn.prepareStatement(operationsQuery)) {
-            storageStmt.executeUpdate();
-            operationsStmt.executeUpdate();
-            conn.prepareStatement(alterQuery).executeUpdate();
-        }
-    }
-
+        // Create StorageContainers first
+    
     /**
      * Creates the TaskHistory table.
      */
@@ -134,11 +114,26 @@ public class LoadBalancerDB {
      * Updates the used capacity of a storage container.
      */
     public void updateContainerLoad(String containerName, long loadChange, Connection conn) throws SQLException {
+        // Check if new load would exceed capacity
+        String checkQuery = "SELECT total_capacity, used_capacity FROM StorageContainers WHERE container_name = ?";
+        try (PreparedStatement checkStmt = conn.prepareStatement(checkQuery)) {
+            checkStmt.setString(1, containerName);
+            ResultSet rs = checkStmt.executeQuery();
+            
+            if (rs.next()) {
+                long totalCapacity = rs.getLong("total_capacity");
+                long currentUsed = rs.getLong("used_capacity");
+                if (currentUsed + loadChange > totalCapacity) {
+                    throw new SQLException("Load change would exceed container capacity");
+                }
+            }
+        }
+     
         String query = "UPDATE StorageContainers SET used_capacity = used_capacity + ? WHERE container_name = ?";
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setLong(1, loadChange);
             stmt.setString(2, containerName);
             stmt.executeUpdate();
         }
-    }
+     }
 }

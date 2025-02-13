@@ -12,16 +12,18 @@ import java.nio.file.Paths;
 import java.sql.*;
 import java.util.Base64;
 
+
+
 public class FileDB {
     private static final String ENCRYPTION_KEY = "MySecretKey12345";
     private SystemLogger logger = SystemLogger.getInstance();
 
     public void createFileTable(Connection conn) throws SQLException {
         String query = "CREATE TABLE IF NOT EXISTS Files (" +
-                       "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
-                       "filename VARCHAR(255), owner VARCHAR(255), path VARCHAR(255), " +
-                       "last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, " +
-                       "FOREIGN KEY(owner) REFERENCES Users(name))";
+            "id INT AUTO_INCREMENT PRIMARY KEY, " +
+            "filename VARCHAR(255) NOT NULL, " +
+            "owner VARCHAR(255) NOT NULL, " +
+            "path VARCHAR(500) NOT NULL)";
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         }
@@ -77,7 +79,7 @@ public class FileDB {
         ObservableList<UserFile> files = FXCollections.observableArrayList();
         try (Connection conn = DBConnection.getMySQLConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                "SELECT id, filename, owner FROM Files WHERE owner = ?")) {
+                "SELECT id, filename, owner, path FROM Files WHERE owner = ?")) {
             stmt.setString(1, username);
             ResultSet rs = stmt.executeQuery();
             while (rs.next()) {
@@ -85,7 +87,7 @@ public class FileDB {
                     rs.getLong("id"),
                     rs.getString("filename"),
                     rs.getString("owner"),
-                    null
+                    rs.getString("path")
                 ));
             }
         } catch (SQLException e) {
@@ -93,8 +95,6 @@ public class FileDB {
         }
         return files;
     }
-
-
 
     public Long addFileMetadata(String filename, String owner, String filePath) {
         try (Connection conn = DBConnection.getMySQLConnection();
@@ -133,7 +133,6 @@ public class FileDB {
         }
     }
 
-
     public boolean deleteFileMetadata(Long fileId) {
         try (Connection conn = DBConnection.getMySQLConnection();
              PreparedStatement stmt = conn.prepareStatement(
@@ -161,7 +160,6 @@ public class FileDB {
         return null;
     }
     
-
     public String getFileContent(String filePath) {
         try {
             Path path = Paths.get(filePath);
@@ -178,8 +176,6 @@ public class FileDB {
         }
     }
     
-    
-
     public String getFilePath(Long fileId) {
         try (Connection conn = DBConnection.getMySQLConnection();
              PreparedStatement stmt = conn.prepareStatement(
@@ -195,27 +191,27 @@ public class FileDB {
         return null;
     }
     
-    
 
     public boolean deleteFile(Long fileId) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
             String query = "DELETE FROM Files WHERE id = ?";
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setLong(1, fileId);
+                String path = getFilePath(fileId);
                 int result = stmt.executeUpdate();
                 if (result > 0) {
-                    logger.logFileOperation("DELETE_SUCCESS", "File ID: " + fileId, "File deleted");
+                    Files.delete(Paths.get(path));
+                    logger.log(SystemLogger.LogLevel.INFO, "File deleted - ID: " + fileId);
                     return true;
                 }
-                logger.logFileOperation("DELETE_FAIL", "File ID: " + fileId, "No file found");
+                logger.log(SystemLogger.LogLevel.WARN, "File not found - ID: " + fileId);
                 return false;
             }
-        } catch (SQLException e) {
-            logger.logError("Database error during file deletion", e);
+        } catch (SQLException | IOException e) {
+            logger.log(SystemLogger.LogLevel.ERROR, "Error deleting file: " + e.getMessage());
             return false;
         }
-    }
-
+     }     
     // Inner class for file permissions
     public static class FilePermission {
         private final boolean canRead;

@@ -185,13 +185,13 @@ public class UserDB {
     public ObservableList<User> getAllUsers() {
         ObservableList<User> users = FXCollections.observableArrayList();
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            String query = "SELECT name, password, role FROM Users";
+            String query = "SELECT name, role FROM Users";
             try (PreparedStatement stmt = conn.prepareStatement(query);
                  ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     users.add(new User(
                         rs.getString("name"),
-                        rs.getString("password"),
+                        null,
                         rs.getString("role")
                     ));
                 }
