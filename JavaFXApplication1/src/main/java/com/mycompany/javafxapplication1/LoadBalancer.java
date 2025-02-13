@@ -155,35 +155,32 @@ public class LoadBalancer {
             return;
         }
     
-        // Map container names to their SSH ports
-        Map<String, Integer> containerPorts = Map.of(
-            "comp20081-files1", 4848,
-            "comp20081-files2", 4849,
-            "comp20081-files3", 4850,
-            "comp20081-files4", 4851
+        // Map container names to their hostnames in Docker network
+        Map<String, String> containerHosts = Map.of(
+            "comp20081-files1", "comp20081-files1",
+            "comp20081-files2", "comp20081-files2",
+            "comp20081-files3", "comp20081-files3",
+            "comp20081-files4", "comp20081-files4"
         );
     
         try {
             JSch jsch = new JSch();
-            com.jcraft.jsch.Session sshSession = jsch.getSession("root", "localhost", containerPorts.get(container));
+            com.jcraft.jsch.Session sshSession = jsch.getSession("root", containerHosts.get(container), 22);
             sshSession.setPassword("root");
             
-            // Skip host key check
             java.util.Properties config = new java.util.Properties();
             config.put("StrictHostKeyChecking", "no");
             sshSession.setConfig(config);
             
-            sshSession.connect(10000); // 10 second timeout
+            sshSession.connect(10000);
     
             Channel channel = sshSession.openChannel("sftp");
-            channel.connect(5000);  // 5 second timeout
+            channel.connect(5000);
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
-            // Upload file to container's /storage directory
             String remoteFilePath = "/storage/" + operation.getFilename();
             sftpChannel.put(operation.getFilePath(), remoteFilePath);
     
-            // Store metadata in MySQL
             FileDB fileDB = new FileDB();
             Long fileId = fileDB.addFileMetadata(
                 operation.getFilename(),
