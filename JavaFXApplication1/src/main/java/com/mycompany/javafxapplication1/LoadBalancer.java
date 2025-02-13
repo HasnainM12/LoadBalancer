@@ -139,29 +139,40 @@ public class LoadBalancer {
     
 
     private void processFileUpload(FileOperation operation) {
-    String container = getNextWorker();
-    if (container == null) {
-        System.out.println("[ERROR] No available storage containers!");
-        return;
+        String container = getNextWorker();
+        if (container == null) {
+            System.err.println("[ERROR] No available storage containers!");
+            return;
+        }
+    
+        try {
+            Path storagePath = Paths.get("storage", container, operation.getFilename());
+            System.out.println("[DEBUG] Attempting to store file at: " + storagePath.toAbsolutePath());
+    
+            // Create directories if they don't exist
+            Files.createDirectories(storagePath.getParent());
+            System.out.println("[DEBUG] Storage directory created/verified: " + storagePath.getParent());
+    
+            // For testing - write some content to verify file creation
+            Files.write(storagePath, "Test content".getBytes());
+            System.out.println("[DEBUG] File written successfully to: " + storagePath);
+    
+            // Store metadata in MySQL
+            FileDB fileDB = new FileDB();
+            Long fileId = fileDB.addFileMetadata(operation.getFilename(), "system", storagePath.toString());
+            System.out.println("[DEBUG] File metadata stored with ID: " + fileId);
+    
+            if (Files.exists(storagePath)) {
+                System.out.println("[DEBUG] File exists in container after storage");
+            } else {
+                System.err.println("[ERROR] File not found in container after storage!");
+            }
+    
+        } catch (IOException e) {
+            System.err.println("[ERROR] File upload failed: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
-
-    try {
-        Path storagePath = Paths.get("storage", container, operation.getFilename());
-
-        // Simulating file storage (should be replaced with actual file writing logic)
-        Files.createDirectories(storagePath.getParent());
-        Files.write(storagePath, new byte[0]); // Placeholder for file content
-
-        // ✅ Store metadata in MySQL
-        FileDB fileDB = new FileDB();
-        fileDB.addFileMetadata(operation.getFilename(), "system", storagePath.toString());
-
-        System.out.println("[INFO] File uploaded successfully to " + container);
-    } catch (IOException e) {
-        System.err.println("[ERROR] File upload failed: " + e.getMessage());
-    }
-}
-
     
 
     private String getFirstAvailableWorker() {
