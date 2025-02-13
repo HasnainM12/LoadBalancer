@@ -44,17 +44,25 @@ public class FilePermissionsController {
 
     private void loadUsers() {
         try {
-            var users = userDB.getAllUsers()
-                .stream()
-                .map(User::getUser) 
-                .filter(user -> !user.equals(owner) && !user.equals(Session.getInstance().getUsername()))
-                .collect(Collectors.toCollection(FXCollections::observableArrayList));
+            var users = userDB.getAllUsers();
+            System.out.println("[DEBUG] Users loaded: " + users.size());
+            
+            userComboBox.setItems(
+                users.stream()
+                    .map(User::getUser)
+                    .filter(user -> !user.equals(owner) && !user.equals(Session.getInstance().getUsername()))
+                    .collect(Collectors.toCollection(FXCollections::observableArrayList))
+            );
     
-            userComboBox.setItems(users);
+            System.out.println("[DEBUG] Filtered users: " + userComboBox.getItems().size());
+    
         } catch (Exception e) {
-            showError("Failed to load users");
+            showError("Failed to load users: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+    
+    
 
 
     private void setupUserSelectionHandler() {
@@ -69,36 +77,31 @@ public class FilePermissionsController {
     }
 
     @FXML
-    private void handleSave() {
-        String selectedUser = userComboBox.getValue();
-        if (selectedUser == null) {
-            showError("Please select a user");
-            return;
-        }
-
-        SystemLogger.getInstance().logSecurityEvent(
-            String.format("Permissions update - File: %d, User: %s, Read: %b, Write: %b",
-                fileId,
-                selectedUser,
-                readPermissionCheckBox.isSelected(),
-                writePermissionCheckBox.isSelected()
-            )
-        );
-
-        boolean success = fileDB.setFilePermissions(
-            fileId,
-            selectedUser,
-            readPermissionCheckBox.isSelected(),
-            writePermissionCheckBox.isSelected()
-        );
-
-        if (success) {
-            showSuccess("Permissions updated successfully");
-            closeDialogue();
-        } else {
-            showError("Failed to save permissions");
-        }
+private void handleSave() {
+    String selectedUser = userComboBox.getValue();
+    if (selectedUser == null) {
+        showError("Please select a user");
+        return;
     }
+
+    System.out.println("[DEBUG] Saving permissions for user: " + selectedUser + ", fileId: " + fileId);
+    System.out.println("[DEBUG] Read: " + readPermissionCheckBox.isSelected() + ", Write: " + writePermissionCheckBox.isSelected());
+
+    boolean success = fileDB.setFilePermissions(
+        fileId,
+        selectedUser,
+        readPermissionCheckBox.isSelected(),
+        writePermissionCheckBox.isSelected()
+    );
+
+    if (success) {
+        showSuccess("Permissions updated successfully");
+        closeDialogue();
+    } else {
+        showError("Failed to save permissions");
+    }
+}
+
     
     private void closeDialogue() {
         ((Stage) saveButton.getScene().getWindow()).close();

@@ -220,6 +220,10 @@ public class SecondaryController {
             Parent root = loader.load();
 
             FilePermissionsController controller = loader.getController();
+            if (controller == null) {
+                throw new RuntimeException("Controller is null! FXML file may be broken.");
+            }
+
             controller.setupDialog(selectedFile.getId(), selectedFile.getFilename(), selectedFile.getOwner());
 
             Stage permissionsStage = new Stage();
@@ -229,8 +233,10 @@ public class SecondaryController {
             permissionsStage.showAndWait();
         } catch (Exception e) {
             showError("Error opening share dialog: " + e.getMessage());
+            e.printStackTrace();
         }
     }
+
 
     @FXML
     private void refreshBtnHandler(ActionEvent event) {
