@@ -75,9 +75,14 @@ public class UpdateController {
             errorLabel.setText("Username already taken.");
             return;
         }
+        
+        if (!passwordField.getText().equals(confirmPasswordField.getText())) {
+            errorLabel.setText("Passwords do not match");
+            return;
+        }
 
         try {
-            boolean success = userDB.updateUserWithRole(currentUsername, newUsername, newPassword, newRole);
+            boolean success = userDB.updateUserWithRole(currentUsername, newUsername, newPassword, roleComboBox.getValue());
             if (success) {
                 showSuccess("Account updated successfully!");
                 returnToSecondary(newUsername);

@@ -72,12 +72,15 @@ public class RegisterController {
             String username = userTextField.getText();
             String password = passPasswordField.getText();
 
+            // Add user with hashed password - UserDB now handles the hashing
             userDB.addUser(username, password, "standard");
-            showDialog("Registration Successful", null, "Your account has been created!", Alert.AlertType.INFORMATION);
+            showDialog("Registration Successful", null, 
+                      "Your account has been created!", Alert.AlertType.INFORMATION);
             switchToPrimary();
 
         } catch (Exception e) {
-            showDialog("Registration Error", null, "An error occurred during registration. Please try again.", Alert.AlertType.ERROR);
+            showDialog("Registration Error", null, 
+                      "Registration failed: " + e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 

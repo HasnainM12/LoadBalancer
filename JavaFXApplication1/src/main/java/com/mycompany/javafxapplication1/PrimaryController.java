@@ -45,6 +45,7 @@ public class PrimaryController {
             String username = userTextField.getText();
             String password = passPasswordField.getText();
             
+            // UserDB now handles password validation with hashing
             if (userDB.validateUser(username, password)) {
                 String role = userDB.getUserRole(username);
                 session.setUser(username, role);

@@ -2,6 +2,7 @@ package com.mycompany.javafxapplication1;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 
 public class Session {
     private static Session instance;
@@ -27,6 +28,10 @@ public class Session {
 
     public void setUser(String username, String role) {
         logger.logSecurityEvent("New session started for user: " + username);
+        if (this.username != null) {
+            Arrays.fill(this.username.toCharArray(), '0');
+        }
+        
         this.username = username;
         this.userRole = role;
         this.lastActivity = LocalDateTime.now();

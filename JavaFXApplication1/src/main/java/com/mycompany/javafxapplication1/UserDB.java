@@ -1,20 +1,44 @@
 package com.mycompany.javafxapplication1;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Random;
+import java.util.Base64;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 
 public class UserDB {
     private final SystemLogger logger = SystemLogger.getInstance();
+    private static final int SALT_LENGTH = 16;
+
+    private String generateSalt() {
+        byte[] salt = new byte[SALT_LENGTH];
+        new Random().nextBytes(salt);
+        return Base64.getEncoder().encodeToString(salt);
+    }
+
+    private String hashPassword(String password, String salt) {
+        try {
+            String saltedPassword = password + salt;
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hashedBytes = md.digest(saltedPassword.getBytes());
+            return Base64.getEncoder().encodeToString(hashedBytes);
+        } catch (NoSuchAlgorithmException e) {
+            logger.logError("Password hashing failed", e);
+            throw new RuntimeException("Password hashing failed", e);
+        }
+    }
 
     public void createUserTable(Connection conn) throws SQLException {
         String query = "CREATE TABLE IF NOT EXISTS Users (" +
                        "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
                        "name VARCHAR(255) UNIQUE, " +
                        "password VARCHAR(255), " +
+                       "salt VARCHAR(255), " +
                        "role VARCHAR(50))";  
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
@@ -23,13 +47,17 @@ public class UserDB {
 
     public void addUser(String username, String password, String role) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            logger.logSecurityEvent("New user account created: " + username + " with role: " + role);
-            String query = "INSERT INTO Users (name, password, role) VALUES (?, ?, ?)";
+            String salt = generateSalt();
+            String hashedPassword = hashPassword(password, salt);
+            
+            String query = "INSERT INTO Users (name, password, salt, role) VALUES (?, ?, ?, ?)";
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setString(1, username);
-                stmt.setString(2, password);
-                stmt.setString(3, role);
+                stmt.setString(2, hashedPassword);
+                stmt.setString(3, salt);
+                stmt.setString(4, role);
                 stmt.executeUpdate();
+                logger.logSecurityEvent("New user account created: " + username);
             }
         } catch (SQLException e) {
             logger.logError("Error adding user", e);
@@ -39,14 +67,18 @@ public class UserDB {
 
     public boolean validateUser(String username, String password) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            String query = "SELECT role FROM Users WHERE name = ? AND password = ?";
+            String query = "SELECT password, salt FROM Users WHERE name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setString(1, username);
-                stmt.setString(2, password);
-                try (ResultSet rs = stmt.executeQuery()) {
-                    logger.logSecurityEvent("Login attempt for user: " + username);
-                    return rs.next();
+                ResultSet rs = stmt.executeQuery();
+                
+                if (rs.next()) {
+                    String storedHash = rs.getString("password");
+                    String salt = rs.getString("salt");
+                    String hashedAttempt = hashPassword(password, salt);
+                    return storedHash.equals(hashedAttempt);
                 }
+                return false;
             }
         } catch (SQLException e) {
             logger.logError("Error validating user", e);
@@ -56,11 +88,15 @@ public class UserDB {
 
     public boolean updateUser(String oldUsername, String newUsername, String newPassword) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            String query = "UPDATE Users SET name = ?, password = ? WHERE name = ?";
+            String salt = generateSalt();
+            String hashedPassword = hashPassword(newPassword, salt);
+            
+            String query = "UPDATE Users SET name = ?, password = ?, salt = ? WHERE name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setString(1, newUsername);
-                stmt.setString(2, newPassword);
-                stmt.setString(3, oldUsername);
+                stmt.setString(2, hashedPassword);
+                stmt.setString(3, salt);
+                stmt.setString(4, oldUsername);
                 return stmt.executeUpdate() > 0;
             }
         } catch (SQLException e) {
@@ -68,15 +104,20 @@ public class UserDB {
             return false;
         }
     }
+    
 
     public boolean updateUserWithRole(String oldUsername, String newUsername, String newPassword, String newRole) {
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
+            String salt = generateSalt();
+            String hashedPassword = hashPassword(newPassword, salt);
+            
+            String query = "UPDATE Users SET name = ?, password = ?, salt = ?, role = ? WHERE name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setString(1, newUsername);
-                stmt.setString(2, newPassword);
-                stmt.setString(3, newRole);
-                stmt.setString(4, oldUsername);
+                stmt.setString(2, hashedPassword);
+                stmt.setString(3, salt);
+                stmt.setString(4, newRole);
+                stmt.setString(5, oldUsername);
                 return stmt.executeUpdate() > 0;
             }
         } catch (SQLException e) {
