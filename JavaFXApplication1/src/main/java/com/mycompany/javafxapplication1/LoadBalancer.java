@@ -165,8 +165,8 @@ public class LoadBalancer {
     
         try {
             JSch jsch = new JSch();
-            com.jcraft.jsch.Session sshSession = jsch.getSession("root", containerHosts.get(container), 22);
-            sshSession.setPassword("root");
+            com.jcraft.jsch.Session sshSession = jsch.getSession("ntu-user", containerHosts.get(container), 22);
+            sshSession.setPassword("ntu-user");
             
             java.util.Properties config = new java.util.Properties();
             config.put("StrictHostKeyChecking", "no");

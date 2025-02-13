@@ -26,9 +26,6 @@ services:
   file-server1:
     container_name: comp20081-files1
     image: pedrombmachado/simple-ssh-container:base
-    environment:
-      - ROOT_PASSWORD=root
-    command: sh -c "echo 'root:root' | chpasswd && /usr/sbin/sshd -D"
     ports:
       - "4848:22"
     volumes:
@@ -40,9 +37,6 @@ services:
   file-server2:
     container_name: comp20081-files2
     image: pedrombmachado/simple-ssh-container:base
-    environment:
-      - ROOT_PASSWORD=root
-    command: sh -c "echo 'root:root' | chpasswd && /usr/sbin/sshd -D"
     ports:
       - "4849:22"
     volumes:
@@ -53,9 +47,6 @@ services:
   file-server3:
     container_name: comp20081-files3
     image: pedrombmachado/simple-ssh-container:base
-    environment:
-      - ROOT_PASSWORD=root
-    command: sh -c "echo 'root:root' | chpasswd && /usr/sbin/sshd -D"
     ports:
       - "4850:22"
     volumes:
@@ -66,9 +57,6 @@ services:
   file-server4:
     container_name: comp20081-files4
     image: pedrombmachado/simple-ssh-container:base
-    environment:
-      - ROOT_PASSWORD=root
-    command: sh -c "echo 'root:root' | chpasswd && /usr/sbin/sshd -D"
     ports:
       - "4851:22"
     volumes:
