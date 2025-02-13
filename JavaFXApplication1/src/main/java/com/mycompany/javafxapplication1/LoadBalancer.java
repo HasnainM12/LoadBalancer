@@ -162,6 +162,10 @@ public class LoadBalancer {
             "comp20081-files3", "comp20081-files3",
             "comp20081-files4", "comp20081-files4"
         );
+                
+        System.out.println("[DEBUG] Selected container: " + container);
+        System.out.println("[DEBUG] Filename: " + operation.getFilename());
+        System.out.println("[DEBUG] File path: " + operation.getFilePath());
     
         try {
             JSch jsch = new JSch();
