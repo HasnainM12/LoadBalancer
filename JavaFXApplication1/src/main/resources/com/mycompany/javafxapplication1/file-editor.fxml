@@ -8,16 +8,21 @@
     <padding>
         <Insets top="10" right="10" bottom="10" left="10"/>
     </padding>
-    
+
     <Label fx:id="fileLabel" style="-fx-font-weight: bold"/>
+
     <TextArea fx:id="contentArea" VBox.vgrow="ALWAYS"/>
-    
+
     <HBox spacing="10" alignment="CENTER_RIGHT">
-        <Button fx:id="saveButton" text="Save">
-            <tooltip><Tooltip text="Save changes"/></tooltip>
+        <Button fx:id="saveButton" text="Save" onAction="#handleSave">
+            <tooltip>
+                <Tooltip text="Save changes"/>
+            </tooltip>
         </Button>
-        <Button fx:id="cancelButton" text="Cancel">
-            <tooltip><Tooltip text="Discard changes"/></tooltip>
+        <Button fx:id="cancelButton" text="Cancel" onAction="#handleCancel">
+            <tooltip>
+                <Tooltip text="Discard changes"/>
+            </tooltip>
         </Button>
     </HBox>
 </VBox>

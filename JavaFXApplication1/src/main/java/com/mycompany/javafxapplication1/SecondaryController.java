@@ -13,6 +13,8 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import java.io.File;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+
 import javafx.event.ActionEvent;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,43 +70,28 @@ public class SecondaryController {
     private void handleUpload() {
         FileChooser fileChooser = new FileChooser();
         File file = fileChooser.showOpenDialog(null);
-
+    
         if (file != null) {
             try {
                 logger.log(SystemLogger.LogLevel.AUDIT, "User " + session.getUsername() + " uploading file: " + file.getName());
                 
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
                 progressDialog.bindProgress(DelayManager.getInstance());
-
-                // ✅ LoadBalancer selects a storage container
-                String selectedContainer = LoadBalancer.getInstance().getNextWorker();
-
-                if (selectedContainer == null) {
-                    showError("No available storage containers!");
-                    return;
-                }
-
-                // ✅ Save the file in the selected container
-                Path containerPath = Paths.get("storage", selectedContainer, file.getName());
-                Files.write(containerPath, readFileContent(file).getBytes());
-
-                // ✅ Store only metadata in MySQL
-                Long fileId = fileDB.addFileMetadata(file.getName(), session.getUsername(), containerPath.toString());
-
-                if (fileId != -1L) {
-                    showSuccess("File uploaded successfully to " + selectedContainer);
-                    refreshFileList();
-                } else {
-                    showError("Failed to upload file");
-                }
-
+    
+                // ✅ Delegate upload task to LoadBalancer
+                LoadBalancer.getInstance().submitTask(
+                    new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
+                );
+    
+                showSuccess("Upload request submitted.");
                 progressDialog.close();
+    
             } catch (Exception e) {
                 showError("Upload error: " + e.getMessage());
             }
         }
     }
-
+    
     @FXML
     private void handleDownload() {
         UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
@@ -113,38 +100,43 @@ public class SecondaryController {
             return;
         }
 
-        // ✅ Get file path from MySQL
-        String filePath = fileDB.getFilePath(selectedFile.getId());
-
-        if (filePath == null || filePath.isEmpty()) {
-            showError("File metadata not found in database!");
+        // ✅ Check permissions before downloading
+        FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
+        if (!permissions.canRead()) {
+            showError("You don't have permission to download this file.");
             return;
         }
 
-        Path storagePath = Paths.get(filePath);
+        // ✅ Send download request to LoadBalancer
+        CompletableFuture<String> future = LoadBalancer.getInstance().submitOperation(
+            new FileOperation(selectedFile.getFilename(), FileOperation.OperationType.DOWNLOAD, 0)
+        );
 
-        if (!Files.exists(storagePath)) {
-            showError("File not found in storage container!");
-            return;
-        }
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setInitialFileName(selectedFile.getFilename());
-        File saveFile = fileChooser.showSaveDialog(null);
-
-        if (saveFile != null) {
-            try {
-                Files.copy(storagePath, saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                showSuccess("File downloaded successfully!");
-            } catch (IOException e) {
-                showError("Download error: " + e.getMessage());
+        future.thenAccept(containerPath -> {
+            if (containerPath == null) {
+                showError("File download failed!");
+                return;
             }
-        }
+
+            Platform.runLater(() -> {
+                FileChooser fileChooser = new FileChooser();
+                fileChooser.setInitialFileName(selectedFile.getFilename());
+                File saveFile = fileChooser.showSaveDialog(null);
+
+                if (saveFile != null) {
+                    try {
+                        Files.copy(Paths.get(containerPath), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        showSuccess("File downloaded successfully!");
+                    } catch (IOException e) {
+                        showError("Download error: " + e.getMessage());
+                    }
+                }
+            });
+        }).exceptionally(ex -> {
+            showError("Download failed: " + ex.getMessage());
+            return null;
+        });
     }
-
-
-    
-
 
     private String readFileContent(File file) throws Exception {
         return new String(java.nio.file.Files.readAllBytes(file.toPath()));
@@ -158,18 +150,10 @@ public class SecondaryController {
             return;
         }
     
-        // ✅ Get file path from MySQL
-        String filePath = fileDB.getFilePath(selectedFile.getId());
-    
-        if (filePath == null || filePath.isEmpty()) {
-            showError("File metadata is missing!");
-            return;
-        }
-    
-        Path storagePath = Paths.get(filePath);
-    
-        if (!Files.exists(storagePath)) {
-            showError("File not found in storage container!");
+        // ✅ Check permissions before deleting
+        FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
+        if (!permissions.canWrite()) {
+            showError("You don't have permission to delete this file.");
             return;
         }
     
@@ -177,20 +161,28 @@ public class SecondaryController {
             "Are you sure you want to delete " + selectedFile.getFilename() + "?");
     
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            try {
-                // ✅ Delete file from storage container
-                Files.delete(storagePath);
-                
-                // ✅ Remove metadata from MySQL
-                fileDB.deleteFileMetadata(selectedFile.getId());
+            // ✅ Send delete request to LoadBalancer
+            CompletableFuture<String> future = LoadBalancer.getInstance().submitOperation(
+                new FileOperation(selectedFile.getFilename(), FileOperation.OperationType.DELETE, 0)
+            );
     
-                showSuccess("File deleted successfully");
-                refreshFileList();
-            } catch (IOException e) {
-                showError("Failed to delete file: " + e.getMessage());
-            }
+            future.thenAccept(response -> {
+                if (response == null || response.equals("FAILED")) {
+                    showError("File deletion failed!");
+                    return;
+                }
+    
+                Platform.runLater(() -> {
+                    showSuccess("File deleted successfully!");
+                    refreshFileList();
+                });
+            }).exceptionally(ex -> {
+                showError("Delete failed: " + ex.getMessage());
+                return null;
+            });
         }
     }
+    
     
     
     @FXML

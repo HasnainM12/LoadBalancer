@@ -1,11 +1,17 @@
 package com.mycompany.javafxapplication1;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import java.nio.file.Path;
+
 
 public class LoadBalancer {
     private static LoadBalancer instance;
@@ -61,23 +67,102 @@ public class LoadBalancer {
     
 
     public void submitTask(FileOperation operation) {
-        String taskId = UUID.randomUUID().toString();
-        String worker = getNextWorker();
-    
-        if (worker == null) {
-            System.out.println("[LoadBalancer] No available workers!");
-            return;
-        }
-    
-        String taskJson = String.format("{\"task_id\": \"%s\", \"worker\": \"%s\", \"type\": \"%s\", \"file\": \"%s\"}",
-                taskId, worker, operation.getType(), operation.getFilename());
-    
-        taskStates.put(taskId, "waiting");
-        workerLoad.put(worker, workerLoad.getOrDefault(worker, 0) + 1); // Increase worker load
-    
-        System.out.println("[INFO] Task " + taskId + " assigned to " + worker); // Assigns task to a worker
-        mqttClient.publishMessage("loadbalancer/waiting", taskJson);
+        executorService.submit(() -> {
+            switch (operation.getType()) {
+                case UPLOAD:
+                    processFileUpload(operation);
+                    break;
+                case DOWNLOAD:
+                    processFileDownload(operation);
+                    break;
+                case DELETE:
+                    processFileDelete(operation);
+                    break;
+            }
+        });
     }
+
+
+    private void processFileDelete(FileOperation operation) {
+        try {
+            FileDB fileDB = new FileDB();
+    
+            // ✅ Retrieve the file ID first
+            Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
+            if (fileId == null) {
+                System.err.println("[ERROR] File ID not found for filename: " + operation.getFilename());
+                return;
+            }
+    
+            // ✅ Now, get the actual file path
+            String filePath = fileDB.getFilePath(fileId);
+            if (filePath == null || !Files.exists(Paths.get(filePath))) {
+                System.err.println("[ERROR] File not found: " + operation.getFilename());
+                return;
+            }
+    
+            // ✅ Delete file from storage
+            Files.delete(Paths.get(filePath));
+    
+            // ✅ Remove metadata from MySQL
+            fileDB.deleteFileMetadata(fileId);
+    
+            System.out.println("[INFO] File deleted successfully: " + operation.getFilename());
+        } catch (Exception e) {
+            System.err.println("[ERROR] File deletion failed: " + e.getMessage());
+        }
+    }
+
+    private void processFileDownload(FileOperation operation) {
+        try {
+            FileDB fileDB = new FileDB();
+    
+            // ✅ Retrieve the file ID first
+            Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
+            if (fileId == null) {
+                System.err.println("[ERROR] File ID not found for filename: " + operation.getFilename());
+                return;
+            }
+    
+            // ✅ Now, get the actual file path
+            String filePath = fileDB.getFilePath(fileId);
+            if (filePath == null || !Files.exists(Paths.get(filePath))) {
+                System.err.println("[ERROR] File not found: " + operation.getFilename());
+                return;
+            }
+    
+            System.out.println("[INFO] File ready for download: " + filePath);
+        } catch (Exception e) {
+            System.err.println("[ERROR] File retrieval failed: " + e.getMessage());
+        }
+    }
+    
+
+    private void processFileUpload(FileOperation operation) {
+    String container = getNextWorker();
+    if (container == null) {
+        System.out.println("[ERROR] No available storage containers!");
+        return;
+    }
+
+    try {
+        Path storagePath = Paths.get("storage", container, operation.getFilename());
+
+        // Simulating file storage (should be replaced with actual file writing logic)
+        Files.createDirectories(storagePath.getParent());
+        Files.write(storagePath, new byte[0]); // Placeholder for file content
+
+        // ✅ Store metadata in MySQL
+        FileDB fileDB = new FileDB();
+        fileDB.addFileMetadata(operation.getFilename(), "system", storagePath.toString());
+
+        System.out.println("[INFO] File uploaded successfully to " + container);
+    } catch (IOException e) {
+        System.err.println("[ERROR] File upload failed: " + e.getMessage());
+    }
+}
+
+    
 
     private String getFirstAvailableWorker() {
         return storageContainers.get(0);

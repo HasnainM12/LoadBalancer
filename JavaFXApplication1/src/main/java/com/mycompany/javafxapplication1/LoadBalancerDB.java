@@ -38,6 +38,22 @@ public class LoadBalancerDB {
                 "ADD CONSTRAINT fk_container_name " +
                 "FOREIGN KEY (container_name) REFERENCES StorageContainers(container_name)";
 
+        String checkConstraintQuery = "SELECT COUNT(*) " +
+                "FROM information_schema.TABLE_CONSTRAINTS " +
+                "WHERE CONSTRAINT_NAME = 'fk_container_name' " +
+                "AND TABLE_NAME = 'OperationsLog' " +
+                "AND TABLE_SCHEMA = DATABASE()";
+
+        try (PreparedStatement checkStmt = conn.prepareStatement(checkConstraintQuery)) {
+            ResultSet rs = checkStmt.executeQuery();
+            if (rs.next() && rs.getInt(1) == 0) {
+                // Constraint does not exist, so add it.
+                try (PreparedStatement alterStmt = conn.prepareStatement(alterQuery)) {
+                    alterStmt.executeUpdate();
+                }
+            }
+        }
+
         try (PreparedStatement storageStmt = conn.prepareStatement(storageQuery);
              PreparedStatement operationsStmt = conn.prepareStatement(operationsQuery)) {
             storageStmt.executeUpdate();

@@ -48,16 +48,18 @@ public class FileEditorController {
         ProgressDialog progressDialog = new ProgressDialog("Loading File");
         progressDialog.bindProgress(DelayManager.getInstance());
         DelayManager.getInstance().resetProgress();
-        
+    
         try {
+            // ✅ First, retrieve the file path from the database
             String filePath = fileDB.getFilePath(fileId);
             if (filePath == null || filePath.isEmpty()) {
                 showError("File not found");
                 closeWindow();
                 return;
             }
-            
-            String content = fileDB.getFileContent(fileId);
+    
+            // ✅ Now, retrieve the actual file content from storage
+            String content = fileDB.getFileContent(filePath);
             if (content != null) {
                 contentArea.setText(content);
                 logger.logFileOperation("OPEN", filename, "File opened for editing");
@@ -70,21 +72,38 @@ public class FileEditorController {
         }
     }
     
+    
     private void handleSave() {
         ProgressDialog progressDialog = new ProgressDialog("Saving File");
         progressDialog.bindProgress(DelayManager.getInstance());
         DelayManager.getInstance().resetProgress();
-
+    
         try {
+            // ✅ Ensure user has write permissions before allowing save
+            FileDB.FilePermission permissions = fileDB.getFilePermissions(fileId, Session.getInstance().getUsername());
+            if (!permissions.canWrite()) {
+                showError("You don't have permission to edit this file.");
+                return;
+            }
+    
             String newContent = contentArea.getText();
+    
+            // ✅ Get the file path before updating it
+            String filePath = fileDB.getFilePath(fileId);
+            if (filePath == null || filePath.isEmpty()) {
+                showError("File not found.");
+                return;
+            }
+    
+            // ✅ Now update the file content in storage
             boolean success = fileDB.updateFile(fileId, newContent);
-            
+    
             if (success) {
                 logger.logFileOperation("SAVE", filename, "File saved successfully");
-                showSuccess("File saved successfully");
+                showSuccess("File saved successfully.");
                 closeWindow();
             } else {
-                showError("Failed to save file");
+                showError("Failed to save file.");
             }
         } catch (Exception e) {
             logger.logError("Save failed", e);
