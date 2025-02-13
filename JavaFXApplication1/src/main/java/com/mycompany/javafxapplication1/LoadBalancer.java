@@ -182,7 +182,7 @@ public class LoadBalancer {
             channel.connect(5000);
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
-            String remoteFilePath = "/storage/" + operation.getFilename();
+            String remoteFilePath = "/files/" + operation.getFilename();
             sftpChannel.put(operation.getFilePath(), remoteFilePath);
     
             FileDB fileDB = new FileDB();

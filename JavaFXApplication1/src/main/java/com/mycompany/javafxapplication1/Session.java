@@ -31,7 +31,7 @@ public class Session {
         if (this.username != null) {
             Arrays.fill(this.username.toCharArray(), '0');
         }
-        
+        System.out.println("[DEBUG] Setting user: " + username);
         this.username = username;
         this.userRole = role;
         this.lastActivity = LocalDateTime.now();
