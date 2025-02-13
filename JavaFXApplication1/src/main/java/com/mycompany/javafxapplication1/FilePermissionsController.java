@@ -32,7 +32,10 @@ public class FilePermissionsController {
         this.fileId = fileId;
         this.filename = filename;
         this.owner = owner;
-    
+
+        // ✅ Ensure userDB is initialized before calling loadUsers()
+        initialise();
+
         if (Session.getInstance().isAdmin() || owner.equals(Session.getInstance().getUsername())) {
             loadUsers();
             setupUserSelectionHandler();
@@ -41,6 +44,7 @@ public class FilePermissionsController {
             closeDialogue();
         }
     }
+
 
     private void loadUsers() {
         try {
