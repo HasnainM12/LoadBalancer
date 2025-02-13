@@ -104,23 +104,17 @@ public class FileDB {
                     String path = rs.getString("path");
                     
                     // Check if file exists in container via SSH
+                    // Check if file exists in container via SSH
                     String[] pathParts = path.split(":");
                     if (pathParts.length == 2) {
                         String container = pathParts[0];
                         String remotePath = pathParts[1];
-                        
-                        // Map container to port
-                        Map<String, Integer> containerPorts = Map.of(
-                            "comp20081-files1", 4848,
-                            "comp20081-files2", 4849,
-                            "comp20081-files3", 4850,
-                            "comp20081-files4", 4851
-                        );
-                        
-                        if (verifyFileInContainer(container, remotePath, containerPorts.get(container))) {
+
+                        if (verifyFileInContainer(container, remotePath)) {
                             files.add(new UserFile(id, filename, owner, path));
                         }
                     }
+
                 }
             }
         } catch (SQLException e) {
@@ -130,20 +124,21 @@ public class FileDB {
         return files;
     }
 
-    public boolean verifyFileInContainer(String container, String remotePath, int port) {
+    public boolean verifyFileInContainer(String container, String remotePath) {
         try {
+            // ✅ SSH directly into the container and check if the file exists
             JSch jsch = new JSch();
-            Session sshSession = jsch.getSession("root", "localhost", port);
-            sshSession.setPassword("root");
+            Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
             sshSession.setConfig("StrictHostKeyChecking", "no");
-            sshSession.connect();
-
+            sshSession.connect(5000);
+    
             Channel channel = sshSession.openChannel("sftp");
-            channel.connect();
+            channel.connect(5000);
             ChannelSftp sftpChannel = (ChannelSftp) channel;
-
+    
             try {
-                sftpChannel.lstat(remotePath);
+                sftpChannel.lstat(remotePath); // ✅ Directly check in `/files/`
                 return true;
             } catch (SftpException e) {
                 return false;
@@ -156,6 +151,7 @@ public class FileDB {
             return false;
         }
     }
+    
 
     public Long addFileMetadata(String filename, String owner, String filePath) {
         try (Connection conn = DBConnection.getMySQLConnection();

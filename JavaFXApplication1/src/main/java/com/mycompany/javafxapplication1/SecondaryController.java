@@ -84,6 +84,7 @@ public class SecondaryController {
                     .setFilePath(file.getAbsolutePath())
                 );
                 showSuccess("Upload request submitted.");
+                refreshFileList();
                 progressDialog.close();
     
             } catch (Exception e) {
