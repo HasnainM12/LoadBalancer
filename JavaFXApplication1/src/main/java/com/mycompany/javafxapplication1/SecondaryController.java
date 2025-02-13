@@ -187,24 +187,36 @@ public class SecondaryController {
     
     
     @FXML
-    private void handleEditFile(ActionEvent event) {
-        System.out.println("[INFO] Edit File button clicked!");
+    private void handleEditFile() {
+        UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
+        if (selectedFile == null) {
+            showError("Please select a file to edit.");
+            return;
+        }
 
         try {
-            // Load the File Editor FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("file-editor.fxml"));
             Parent root = loader.load();
 
-            // Create a new stage for the file editor
-            Stage fileEditorStage = new Stage();
-            fileEditorStage.setTitle("File Editor");
-            fileEditorStage.setScene(new Scene(root, 600, 400));
-            fileEditorStage.show();
-        } catch (IOException e) {
-            System.err.println("[ERROR] Failed to open File Editor: " + e.getMessage());
+            FileEditorController controller = loader.getController();
+            if (controller == null) {
+                throw new RuntimeException("Controller is null! FXML file may be broken.");
+            }
+
+            // ✅ Pass file ID, filename, and owner to the editor
+            controller.setupEditor(selectedFile.getId(), selectedFile.getFilename(), selectedFile.getOwner());
+
+            Stage editorStage = new Stage();
+            editorStage.setTitle("Edit File: " + selectedFile.getFilename());
+            editorStage.setScene(new Scene(root));
+            editorStage.initModality(Modality.APPLICATION_MODAL);
+            editorStage.showAndWait();
+        } catch (Exception e) {
+            showError("Failed to open File Editor: " + e.getMessage());
             e.printStackTrace();
         }
     }
+
 
 
     @FXML

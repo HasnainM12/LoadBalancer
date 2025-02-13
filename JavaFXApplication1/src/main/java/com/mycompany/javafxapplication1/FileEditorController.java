@@ -15,34 +15,68 @@ public class FileEditorController {
     private Long fileId;
     private String filename;
     private String owner;
+    private String path;
     private FileDB fileDB;
     private final SystemLogger logger = SystemLogger.getInstance();
     
-    public void initialise(Long fileId, String filename, String owner) {
+    public void setupEditor(Long fileId, String filename, String owner) {
+        // 1️⃣ Store file details
         this.fileId = fileId;
         this.filename = filename;
         this.owner = owner;
-        this.fileDB = new FileDB();
-        
+    
+        // 2️⃣ Ensure fileDB is initialized
+        if (fileDB == null) {
+            fileDB = new FileDB();
+        }
+    
+        // 3️⃣ Retrieve the file path from the database
+        this.path = fileDB.getFilePath(fileId);
+        System.out.println("[DEBUG] setupEditor() - File path retrieved: " + path);
+    
+        // 4️⃣ If the path is missing, show an error and stop execution
+        if (path == null) {
+            showError("Error: Could not retrieve file path.");
+            return;
+        }
+    
+        // 5️⃣ Now that all data is available, call initialise()
+        initialise();
+    }
+    @FXML
+    public void initialise() {
+        // 1️⃣ Ensure fileDB is initialized
+        if (fileDB == null) {
+            fileDB = new FileDB();
+        }
+        System.out.println("[DEBUG] fileDB initialised in FileEditorController.");
+
+        // 2️⃣ Get the current logged-in user
         String currentUser = Session.getInstance().getUsername();
-        boolean canEdit = owner.equals(currentUser);
-        
+        boolean canEdit = owner.equals(currentUser); // 3️⃣ Check if the user is the owner
+
+        // 4️⃣ If the user is NOT the owner, check their file permissions
         if (!canEdit) {
             FileDB.FilePermission permissions = fileDB.getFilePermissions(fileId, currentUser);
-            canEdit = permissions.canWrite();
-            
+            canEdit = permissions.canWrite(); // ✅ Allow editing if the user has write access
+
+            // 5️⃣ If the user has NO read access, show error & close window
             if (!permissions.canRead()) {
                 showError("You don't have permission to view this file");
                 closeWindow();
                 return;
             }
         }
-        
+
+        // 6️⃣ Enable/Disable UI based on permissions
         saveButton.setDisable(!canEdit);
         contentArea.setEditable(canEdit);
-        
+
+        // 7️⃣ Load the file content into the editor
         loadFileContent();
     }
+
+    
     
     private void loadFileContent() {
         ProgressDialog progressDialog = new ProgressDialog("Loading File");
@@ -72,7 +106,7 @@ public class FileEditorController {
         }
     }
     
-    
+    @FXML
     private void handleSave() {
         ProgressDialog progressDialog = new ProgressDialog("Saving File");
         progressDialog.bindProgress(DelayManager.getInstance());
@@ -111,6 +145,7 @@ public class FileEditorController {
         }
     }
     
+    @FXML
     private void handleCancel() {
         logger.logFileOperation("CANCEL_EDIT", filename, "Edit cancelled by user");
         closeWindow();
