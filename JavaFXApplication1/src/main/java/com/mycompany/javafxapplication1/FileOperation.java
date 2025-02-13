@@ -20,6 +20,9 @@ public class FileOperation {
     public String getFilename() { return filename; }
     public OperationType getType() { return type; }
     public long getTimestamp() { return timestamp; }
+    private String filePath;
+    public void setFilePath(String path) { this.filePath = path; }
+    public String getFilePath() { return this.filePath; }
 
     public long getEstimatedProcessingTime() {
         long baseTime;

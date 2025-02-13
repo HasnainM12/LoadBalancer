@@ -6,10 +6,9 @@ module com.mycompany.javafxapplication1 {
     requires transitive javafx.graphics;
     requires javafx.base;
     requires java.logging;
-    requires java.desktop;  // Required for Java2D rendering
+    requires java.desktop;
     requires transitive org.eclipse.paho.client.mqttv3;
-
-
+    requires jsch; // Use only the automatic module name assigned to the JSch jar.
 
     opens com.mycompany.javafxapplication1 to javafx.fxml, javafx.graphics, javafx.base;
     exports com.mycompany.javafxapplication1;

@@ -1,5 +1,6 @@
 package com.mycompany.javafxapplication1;
 
+import com.mycompany.javafxapplication1.Session;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -9,8 +10,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.JSch;
 import org.eclipse.paho.client.mqttv3.MqttException;
-import java.nio.file.Path;
+import com.jcraft.jsch.Channel;
+
+
+// Assuming these are
 
 
 public class LoadBalancer {
@@ -44,10 +51,13 @@ public class LoadBalancer {
         mqttClient.subscribeToTopic("loadbalancer/processing", this);
         mqttClient.subscribeToTopic("loadbalancer/completed", this);
         mqttClient.subscribeToTopic("loadbalancer/task/complete", this);
+        startTaskMonitor(); 
+        initializeContainers();
+        startRequestProcessor();
         startTaskMonitor();
-
-
     }
+
+
 
     public static LoadBalancer getInstance() {
         if (instance == null) {
@@ -145,37 +155,54 @@ public class LoadBalancer {
             return;
         }
     
+        // Map container names to their SSH ports
+        Map<String, Integer> containerPorts = Map.of(
+            "comp20081-files1", 4848,
+            "comp20081-files2", 4849,
+            "comp20081-files3", 4850,
+            "comp20081-files4", 4851
+        );
+    
         try {
-            Path storagePath = Paths.get("storage", container, operation.getFilename());
-            System.out.println("[DEBUG] Attempting to store file at: " + storagePath.toAbsolutePath());
+            JSch jsch = new JSch();
+            com.jcraft.jsch.Session sshSession = jsch.getSession("root", "localhost", containerPorts.get(container));
+            sshSession.setPassword("root");
+            
+            // Skip host key check
+            java.util.Properties config = new java.util.Properties();
+            config.put("StrictHostKeyChecking", "no");
+            sshSession.setConfig(config);
+            
+            sshSession.connect(10000); // 10 second timeout
     
-            // Create directories if they don't exist
-            Files.createDirectories(storagePath.getParent());
-            System.out.println("[DEBUG] Storage directory created/verified: " + storagePath.getParent());
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect(5000);  // 5 second timeout
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
     
-            // For testing - write some content to verify file creation
-            Files.write(storagePath, "Test content".getBytes());
-            System.out.println("[DEBUG] File written successfully to: " + storagePath);
+            // Upload file to container's /storage directory
+            String remoteFilePath = "/storage/" + operation.getFilename();
+            sftpChannel.put(operation.getFilePath(), remoteFilePath);
     
             // Store metadata in MySQL
             FileDB fileDB = new FileDB();
-            Long fileId = fileDB.addFileMetadata(operation.getFilename(), "system", storagePath.toString());
-            System.out.println("[DEBUG] File metadata stored with ID: " + fileId);
+            Long fileId = fileDB.addFileMetadata(
+                operation.getFilename(),
+                Session.getInstance().getUsername(),
+                container + ":" + remoteFilePath
+            );
     
-            if (Files.exists(storagePath)) {
-                System.out.println("[DEBUG] File exists in container after storage");
-            } else {
-                System.err.println("[ERROR] File not found in container after storage!");
-            }
+            System.out.println("[INFO] File uploaded to container " + container + " with ID: " + fileId);
     
-        } catch (IOException e) {
+            sftpChannel.exit();
+            sshSession.disconnect();
+    
+        } catch (Exception e) {
             System.err.println("[ERROR] File upload failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    
 
-    private String getFirstAvailableWorker() {
+        private String getFirstAvailableWorker() {
         return storageContainers.get(0);
     }
 
@@ -322,13 +349,24 @@ public class LoadBalancer {
         }
     }
 
-    
     private void initializeContainers() {
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            storageContainers.addAll(loadBalancerDB.getStorageContainers(conn));
-            for (String container : storageContainers) {
-                containerLoad.put(container, 0);
-            }
+            List<String> containers = Arrays.asList(
+                "comp20081-files1",
+                "comp20081-files2", 
+                "comp20081-files3",
+                "comp20081-files4"
+            );
+            
+            storageContainers.addAll(containers);
+            containers.forEach(container -> {
+                try {
+                    loadBalancerDB.addStorageContainer(container, 1000, conn);
+                    containerLoad.put(container, 0);
+                } catch (SQLException e) {
+                    logger.log(SystemLogger.LogLevel.ERROR, "Failed to initialize container " + container);
+                }
+            });
         } catch (SQLException e) {
             logger.log(SystemLogger.LogLevel.ERROR, "Failed to initialize containers: " + e.getMessage());
         }

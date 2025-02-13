@@ -12,6 +12,13 @@ import java.nio.file.Paths;
 import java.sql.*;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.Session;
+import com.jcraft.jsch.ChannelSftp;
+import com.jcraft.jsch.SftpException;
+import com.jcraft.jsch.Channel;
 
 
 
@@ -80,24 +87,40 @@ public class FileDB {
         ObservableList<UserFile> files = FXCollections.observableArrayList();
         
         try (Connection conn = DBConnection.getMySQLConnection()) {
-            LoadBalancerDB loadBalancerDB = new LoadBalancerDB();
-            List<String> containers = loadBalancerDB.getStorageContainers(conn);
-            System.out.println("[DEBUG] Found containers: " + containers);
-    
-            String query = "SELECT DISTINCT f.id, f.filename, f.owner, f.path FROM Files f " +
-                          "LEFT JOIN FilePermissions fp ON f.id = fp.file_id " +
-                          "WHERE f.owner = ? OR (fp.user_id = ? AND fp.can_read = true)";
-                          
+            String query = "SELECT DISTINCT f.id, f.filename, f.owner, f.path " +
+                        "FROM Files f " +
+                        "LEFT JOIN FilePermissions fp ON f.id = fp.file_id " +
+                        "WHERE f.owner = ? OR (fp.user_id = ? AND fp.can_read = true)";
+                        
             try (PreparedStatement stmt = conn.prepareStatement(query)) {
                 stmt.setString(1, username);
                 stmt.setString(2, username);
                 
                 ResultSet rs = stmt.executeQuery();
-                System.out.println("[DEBUG] Querying files for user: " + username);
-                
                 while (rs.next()) {
-                    System.out.println("[DEBUG] Found file in DB: " + rs.getString("filename") + 
-                                     ", Owner: " + rs.getString("owner"));
+                    Long id = rs.getLong("id");
+                    String filename = rs.getString("filename");
+                    String owner = rs.getString("owner");
+                    String path = rs.getString("path");
+                    
+                    // Check if file exists in container via SSH
+                    String[] pathParts = path.split(":");
+                    if (pathParts.length == 2) {
+                        String container = pathParts[0];
+                        String remotePath = pathParts[1];
+                        
+                        // Map container to port
+                        Map<String, Integer> containerPorts = Map.of(
+                            "comp20081-files1", 4848,
+                            "comp20081-files2", 4849,
+                            "comp20081-files3", 4850,
+                            "comp20081-files4", 4851
+                        );
+                        
+                        if (verifyFileInContainer(container, remotePath, containerPorts.get(container))) {
+                            files.add(new UserFile(id, filename, owner, path));
+                        }
+                    }
                 }
             }
         } catch (SQLException e) {
@@ -105,6 +128,33 @@ public class FileDB {
         }
         
         return files;
+    }
+
+    public boolean verifyFileInContainer(String container, String remotePath, int port) {
+        try {
+            JSch jsch = new JSch();
+            Session sshSession = jsch.getSession("root", "localhost", port);
+            sshSession.setPassword("root");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect();
+
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect();
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
+
+            try {
+                sftpChannel.lstat(remotePath);
+                return true;
+            } catch (SftpException e) {
+                return false;
+            } finally {
+                sftpChannel.exit();
+                sshSession.disconnect();
+            }
+        } catch (Exception e) {
+            logger.log(SystemLogger.LogLevel.ERROR, "Error verifying file in container: " + e.getMessage());
+            return false;
+        }
     }
 
     public Long addFileMetadata(String filename, String owner, String filePath) {
