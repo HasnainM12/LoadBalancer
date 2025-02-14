@@ -126,43 +126,48 @@ public class SecondaryController {
             return;
         }
 
-        // ✅ Check permissions before downloading
+        // Check permissions before downloading
         FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
         if (!permissions.canRead()) {
             showError("You don't have permission to download this file.");
             return;
         }
 
-        // ✅ Send download request to LoadBalancer
-        CompletableFuture<String> future = LoadBalancer.getInstance().submitOperation(
-            new FileOperation(selectedFile.getFilename(), FileOperation.OperationType.DOWNLOAD, 0)
-        );
+        String taskId = UUID.randomUUID().toString();
+        ProgressDialog progressDialog = new ProgressDialog("Downloading File");
+        progressDialog.trackProgress(taskId);
+        progressDialog.setAutoClose(true);
 
-        future.thenAccept(containerPath -> {
-            if (containerPath == null) {
-                showError("File download failed!");
-                return;
+        // Prepare JSON with required fields for download
+        JSONObject taskData = new JSONObject();
+        taskData.put("taskId", taskId);
+        taskData.put("operation", "DOWNLOAD");
+        taskData.put("filename", selectedFile.getFilename());
+        taskData.put("fileId", selectedFile.getId());
+
+        // Offload the download process to a background thread using a Task
+        Task<Void> downloadTask = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                LoadBalancer.getInstance().submitTask(taskData);
+                return null;
             }
+        };
 
-            Platform.runLater(() -> {
-                FileChooser fileChooser = new FileChooser();
-                fileChooser.setInitialFileName(selectedFile.getFilename());
-                File saveFile = fileChooser.showSaveDialog(null);
-
-                if (saveFile != null) {
-                    try {
-                        Files.copy(Paths.get(containerPath), saveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                        showSuccess("File downloaded successfully!");
-                    } catch (IOException e) {
-                        showError("Download error: " + e.getMessage());
-                    }
-                }
-            });
-        }).exceptionally(ex -> {
-            showError("Download failed: " + ex.getMessage());
-            return null;
+        downloadTask.setOnFailed(e -> {
+            Throwable ex = downloadTask.getException();
+            showError("Download error: " + ex.getMessage());
         });
+
+        // Show the progress dialog immediately and then start the task
+        progressDialog.show();
+        new Thread(downloadTask).start();
+
+        // (Optionally, after the MQTT "completed" message is received,
+        // you can prompt the user with a FileChooser to select a save location
+        // and then copy the downloaded file from the container.)
     }
+
 
     private String readFileContent(File file) throws Exception {
         return new String(java.nio.file.Files.readAllBytes(file.toPath()));
@@ -175,39 +180,49 @@ public class SecondaryController {
             showError("Please select a file to delete");
             return;
         }
-    
-        // ✅ Check permissions before deleting
+
+        // Check permissions before deleting
         FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
         if (!permissions.canWrite()) {
             showError("You don't have permission to delete this file.");
             return;
         }
-    
-        Optional<ButtonType> result = showConfirmation("Delete File", 
-            "Are you sure you want to delete " + selectedFile.getFilename() + "?");
-    
+
+        Optional<ButtonType> result = showConfirmation("Delete File", "Are you sure you want to delete " + selectedFile.getFilename() + "?");
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            // ✅ Send delete request to LoadBalancer
-            CompletableFuture<String> future = LoadBalancer.getInstance().submitOperation(
-                new FileOperation(selectedFile.getFilename(), FileOperation.OperationType.DELETE, 0)
-            );
-    
-            future.thenAccept(response -> {
-                if (response == null || response.equals("FAILED")) {
-                    showError("File deletion failed!");
-                    return;
+            String taskId = UUID.randomUUID().toString();
+            ProgressDialog progressDialog = new ProgressDialog("Deleting File");
+            progressDialog.trackProgress(taskId);
+            progressDialog.setAutoClose(true);
+
+            JSONObject taskData = new JSONObject();
+            taskData.put("taskId", taskId);
+            taskData.put("operation", "DELETE");
+            taskData.put("filename", selectedFile.getFilename());
+            taskData.put("fileId", selectedFile.getId());
+
+            // Offload the delete process to a background thread using a Task
+            Task<Void> deleteTask = new Task<Void>() {
+                @Override
+                protected Void call() throws Exception {
+                    LoadBalancer.getInstance().submitTask(taskData);
+                    return null;
                 }
-    
-                Platform.runLater(() -> {
-                    showSuccess("File deleted successfully!");
-                    refreshFileList();
-                });
-            }).exceptionally(ex -> {
-                showError("Delete failed: " + ex.getMessage());
-                return null;
+            };
+
+            deleteTask.setOnFailed(e -> {
+                Throwable ex = deleteTask.getException();
+                showError("Delete error: " + ex.getMessage());
             });
+
+            progressDialog.show();
+            new Thread(deleteTask).start();
+
+            // The MQTT "completed" message will indicate deletion success,
+            // after which you can refresh the file list.
         }
     }
+
     
     
     

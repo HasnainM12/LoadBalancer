@@ -11,6 +11,8 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import org.json.JSONObject;
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 
 
 public class ProgressDialog extends Dialog<Void> {
@@ -45,11 +47,11 @@ public class ProgressDialog extends Dialog<Void> {
         this.taskId = taskId;
         progressBar.setProgress(0);
         
-        mqttClient.subscribe("task/waiting", (topic, msg) -> handleTaskUpdate(msg, 0.25, "Waiting..."));
-        mqttClient.subscribe("task/processing", (topic, msg) -> handleTaskUpdate(msg, 0.5, "Processing..."));
-        mqttClient.subscribe("task/retry", (topic, msg) -> handleTaskUpdate(msg, 0.25, "Retrying..."));
-        mqttClient.subscribe("task/completed", (topic, msg) -> handleTaskUpdate(msg, 1.0, "Completed"));
-        mqttClient.subscribe("task/failed", (topic, msg) -> handleTaskError(msg));
+        mqttClient.subscribe("waiting", (topic, msg) -> handleTaskUpdate(msg, 0.25, "Waiting..."));
+        mqttClient.subscribe("processing", (topic, msg) -> handleTaskUpdate(msg, 0.5, "Processing..."));
+        mqttClient.subscribe("retry", (topic, msg) -> handleTaskUpdate(msg, 0.25, "Retrying..."));
+        mqttClient.subscribe("completed", (topic, msg) -> handleTaskUpdate(msg, 1.0, "Completed"));
+        mqttClient.subscribe("failed", (topic, msg) -> handleTaskError(msg));
     }
 
     private void handleTaskUpdate(MqttMessage message, double progress, String status) {
@@ -87,18 +89,14 @@ public class ProgressDialog extends Dialog<Void> {
 
     private void handleCompletion() {
         closeButton.setDisable(false);
+    
         if (autoClose) {
-            Platform.runLater(() -> {
-                try {
-                    Thread.sleep(1000);
-                    close();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            });
+            PauseTransition pause = new PauseTransition(Duration.seconds(1));
+            pause.setOnFinished(event -> close());
+            pause.play();
         }
     }
-
+    
     public void setAutoClose(boolean autoClose) {
         this.autoClose = autoClose;
     }
