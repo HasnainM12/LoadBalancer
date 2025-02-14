@@ -37,19 +37,22 @@ public class FileDB {
         }
     }
 
-    public void createFilePermissionsTable(Connection conn) throws SQLException {
-        String query = "CREATE TABLE IF NOT EXISTS FilePermissions (" +
-                       "id INTEGER PRIMARY KEY AUTO_INCREMENT, " +
-                       "file_id INTEGER, " +
-                       "user_id VARCHAR(255), " +
-                       "can_read BOOLEAN DEFAULT false, " +
-                       "can_write BOOLEAN DEFAULT false, " +
-                       "FOREIGN KEY(file_id) REFERENCES Files(id), " +
-                       "FOREIGN KEY(user_id) REFERENCES Users(name))";
+    void createFilePermissionsTable(Connection conn) throws SQLException {
+        String query = "CREATE TABLE IF NOT EXISTS FilePermissions ("
+                     + "id INTEGER PRIMARY KEY AUTO_INCREMENT, "
+                     + "file_id INTEGER, "
+                     + "user_id VARCHAR(255), "
+                     + "can_read BOOLEAN DEFAULT false, "
+                     + "can_write BOOLEAN DEFAULT false, "
+                     + "UNIQUE (file_id, user_id), "
+                     + "FOREIGN KEY (file_id) REFERENCES Files(id), "
+                     + "FOREIGN KEY (user_id) REFERENCES Users(name))";
+    
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.executeUpdate();
         }
     }
+    
 
     public boolean setFilePermissions(long fileId, String userId, boolean canRead, boolean canWrite) {
         try (Connection conn = DBConnection.getMySQLConnection();
@@ -153,11 +156,12 @@ public class FileDB {
     }
     
 
-    public Long addFileMetadata(String filename, String owner, String filePath) {
+    Long addFileMetadata(String filename, String owner, String filePath) {
         try (Connection conn = DBConnection.getMySQLConnection();
              PreparedStatement stmt = conn.prepareStatement(
-                 "INSERT INTO Files (filename, owner, path) VALUES (?, ?, ?)",
+                 "INSERT INTO Files (filename, owner, path) VALUES (?, ?, ?)", 
                  Statement.RETURN_GENERATED_KEYS)) {
+    
             stmt.setString(1, filename);
             stmt.setString(2, owner);
             stmt.setString(3, filePath);
@@ -165,14 +169,24 @@ public class FileDB {
     
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next()) {
-                    return rs.getLong(1);
+                    Long fileId = rs.getLong(1);
+    
+                    // Automatically grant full permissions to the file owner
+                    boolean permissionSet = setFilePermissions(fileId, owner, true, true);
+                    if (!permissionSet) {
+                        System.err.println("[ERROR] Failed to set file permissions for owner: " + owner);
+                    }
+    
+                    return fileId;
                 }
             }
         } catch (SQLException e) {
             System.err.println("[ERROR] Failed to store file metadata: " + e.getMessage());
         }
+        
         return -1L;
     }
+    
 
     public boolean updateFile(Long fileId, String newContent) {
         String filePath = getFilePath(fileId);
