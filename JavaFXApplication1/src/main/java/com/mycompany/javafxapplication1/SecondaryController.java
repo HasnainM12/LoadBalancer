@@ -13,7 +13,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import java.io.File;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.json.JSONObject;
 
 import javafx.event.ActionEvent;
 import java.io.IOException;
@@ -70,29 +72,29 @@ public class SecondaryController {
     private void handleUpload() {
         FileChooser fileChooser = new FileChooser();
         File file = fileChooser.showOpenDialog(null);
-    
+
         if (file != null) {
             try {
-                logger.log(SystemLogger.LogLevel.AUDIT, "User " + session.getUsername() + " uploading file: " + file.getName());
+                String taskId = UUID.randomUUID().toString();
                 
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
-                progressDialog.bindProgress(DelayManager.getInstance());
-    
-                // ✅ Delegate upload task to LoadBalancer
-                LoadBalancer.getInstance().submitTask(
-                    new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
-                    .setFilePath(file.getAbsolutePath())
-                );
-                showSuccess("Upload request submitted.");
-                refreshFileList();
-                progressDialog.close();
-    
+                progressDialog.trackProgress(taskId);
+                
+                JSONObject taskData = new JSONObject();
+                taskData.put("taskId", taskId);
+                taskData.put("operation", "UPLOAD");
+                taskData.put("filename", file.getName());
+                taskData.put("path", file.getAbsolutePath());
+                
+                LoadBalancer.getInstance().submitTask(taskData);
+                
+                progressDialog.show();
             } catch (Exception e) {
                 showError("Upload error: " + e.getMessage());
             }
         }
     }
-    
+        
     @FXML
     private void handleDownload() {
         UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
