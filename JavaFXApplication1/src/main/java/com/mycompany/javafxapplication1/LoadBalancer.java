@@ -35,7 +35,7 @@ public class LoadBalancer {
     private final ExecutorService executorService;
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
     private final SystemLogger logger = SystemLogger.getInstance();
-    private final MQTTClient mqttClient;
+    private static MQTTClient mqttClient;
     
     // Task tracking
     private final Map<String, TaskState> taskStates = new ConcurrentHashMap<>();
@@ -74,8 +74,10 @@ public class LoadBalancer {
         executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         
         // Initialize MQTT
-        mqttClient = new MQTTClient("LoadBalancer-" + UUID.randomUUID().toString());
-        mqttClient.subscribe("task/+", this::handleTaskMessage);
+        if (mqttClient == null) {
+            mqttClient = new MQTTClient("LoadBalancer");
+            mqttClient.subscribe("task/+", this::handleTaskMessage);
+        }
         
         initializeContainers();
         startRequestProcessor();

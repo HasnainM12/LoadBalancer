@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.json.JSONObject;
+import javafx.concurrent.Task;
 
 import javafx.event.ActionEvent;
 import java.io.IOException;
@@ -76,28 +77,45 @@ public class SecondaryController {
         if (file != null) {
             try {
                 String taskId = UUID.randomUUID().toString();
-                
+        
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
                 progressDialog.trackProgress(taskId);
-                
+        
                 // Create FileOperation with the file path
                 FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
-                    .setFilePath(file.getAbsolutePath());
-                
+                        .setFilePath(file.getAbsolutePath());
+        
+                // Prepare JSON with all required fields including filePath
                 JSONObject taskData = new JSONObject();
                 taskData.put("taskId", taskId);
                 taskData.put("operation", "UPLOAD");
                 taskData.put("filename", file.getName());
                 taskData.put("size", file.length());
-                
-                LoadBalancer.getInstance().submitTask(taskData);
-                
-                progressDialog.show();
+                taskData.put("filePath", file.getAbsolutePath());
+        
+                // Offload the upload process to a background thread using a Task
+                Task<Void> uploadTask = new Task<Void>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        LoadBalancer.getInstance().submitTask(taskData);
+                        return null;
+                    }
+                };
+        
+                // Optionally, handle success or failure
+                uploadTask.setOnSucceeded(e -> progressDialog.show());
+                uploadTask.setOnFailed(e -> {
+                    Throwable ex = uploadTask.getException();
+                    showError("Upload error: " + ex.getMessage());
+                });
+        
+                // Start the Task on a new thread
+                new Thread(uploadTask).start();
             } catch (Exception e) {
                 showError("Upload error: " + e.getMessage());
             }
         }
-    }
+    }    
         
     @FXML
     private void handleDownload() {
