@@ -55,9 +55,7 @@ public class LoadBalancer {
         mqttClient.subscribeToTopic("loadbalancer/completed", this);
         mqttClient.subscribeToTopic("loadbalancer/task/complete", this);
         startTaskMonitor(); 
-        initializeContainers();
-        startRequestProcessor();
-        startTaskMonitor();
+        startHealthChecks();
     }
 
 
@@ -227,12 +225,12 @@ public class LoadBalancer {
         List<String> healthyContainers = storageContainers.stream()
             .filter(container -> containerHealth.getOrDefault(container, false))
             .collect(Collectors.toList());
-        
+    
         if (healthyContainers.isEmpty()) {
             System.err.println("[ERROR] No healthy storage containers available!");
             return null;
         }
-        
+    
         switch (schedulingAlgorithm) {
             case FCFS:
                 return healthyContainers.get(0);
@@ -244,6 +242,7 @@ public class LoadBalancer {
                 return healthyContainers.get(0);
         }
     }
+    
         
     public void handleMessage(String topic, String message) {
         switch (topic) {
@@ -407,14 +406,37 @@ public class LoadBalancer {
     
     private void checkContainerHealth() {
         for (String container : storageContainers) {
+            boolean wasHealthy = containerHealth.getOrDefault(container, true);
             boolean isHealthy = isContainerHealthy(container);
+    
             containerHealth.put(container, isHealthy);
-            
-            if (!isHealthy) {
-                System.err.println("[WARNING] Container " + container + " is unhealthy!");
+    
+            // ✅ Log status changes
+            if (wasHealthy && !isHealthy) {
+                System.err.println("[WARNING] Container " + container + " went offline!");
+                reassignTasksFrom(container);
+            } else if (!wasHealthy && isHealthy) {
+                System.out.println("[INFO] Container " + container + " is back online!");
             }
         }
     }
+
+    private void reassignTasksFrom(String failedContainer) {
+        System.out.println("[INFO] Reassigning tasks from failed container: " + failedContainer);
+        
+        for (FileOperation operation : requestQueue) {
+            String nextWorker = getNextWorker(); // Find a new container
+            if (nextWorker == null) {
+                System.err.println("[ERROR] No healthy storage containers available for reassignment!");
+                break;
+            }
+    
+            System.out.println("[INFO] Reassigning task " + operation.getFilename() + " to " + nextWorker);
+            submitTask(operation);
+        }
+    }
+    
+    
     
     private boolean isContainerHealthy(String container) {
         try {
@@ -449,6 +471,7 @@ public class LoadBalancer {
         roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
         return worker;
     }
+    
 
     // END OF CONTAINER HEALTH
 
