@@ -77,14 +77,14 @@ public class SecondaryController {
         if (file != null) {
             try {
                 String taskId = UUID.randomUUID().toString();
-        
+    
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
                 progressDialog.trackProgress(taskId);
-        
+    
                 // Create FileOperation with the file path
                 FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
                         .setFilePath(file.getAbsolutePath());
-        
+    
                 // Prepare JSON with all required fields including filePath
                 JSONObject taskData = new JSONObject();
                 taskData.put("taskId", taskId);
@@ -92,7 +92,7 @@ public class SecondaryController {
                 taskData.put("filename", file.getName());
                 taskData.put("size", file.length());
                 taskData.put("filePath", file.getAbsolutePath());
-        
+    
                 // Offload the upload process to a background thread using a Task
                 Task<Void> uploadTask = new Task<Void>() {
                     @Override
@@ -101,21 +101,22 @@ public class SecondaryController {
                         return null;
                     }
                 };
-        
-                // Optionally, handle success or failure
-                uploadTask.setOnSucceeded(e -> progressDialog.show());
+    
+                // Handle failure if the task encounters an error
                 uploadTask.setOnFailed(e -> {
                     Throwable ex = uploadTask.getException();
                     showError("Upload error: " + ex.getMessage());
                 });
-        
-                // Start the Task on a new thread
+    
+                // Display the progress dialog immediately and then start the task
+                progressDialog.show();
                 new Thread(uploadTask).start();
             } catch (Exception e) {
                 showError("Upload error: " + e.getMessage());
             }
         }
-    }    
+    }
+     
         
     @FXML
     private void handleDownload() {
