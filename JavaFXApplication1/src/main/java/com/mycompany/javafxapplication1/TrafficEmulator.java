@@ -57,7 +57,12 @@ public class TrafficEmulator {
 
     private void handleNewTask(JSONObject taskData) {
         String taskId = taskData.getString("taskId");
-        System.out.println("[DEBUG] Received Task: " + taskData.toString()); // 🔍 Debugging line
+        System.out.println("[DEBUG] Received Task: " + taskData.toString());
+
+        if (taskStates.containsKey(taskId)) {
+            System.out.println("[DEBUG] Task " + taskId + " is already queued.");
+            return; // ✅ Prevent duplicate processing
+        }
 
         taskStates.put(taskId, TaskState.QUEUED);
         retryCount.put(taskId, 0);
@@ -70,7 +75,7 @@ public class TrafficEmulator {
 
         taskQueue.offer(task);
         publishTaskStatus(taskId, "queued");
-}
+    }
 
 
    private long calculateDelay(String operation) {
@@ -79,23 +84,25 @@ public class TrafficEmulator {
        return (baseDelay + variableDelay) * 1000L;
    }
 
-   private void startTaskProcessor() {
-       executor.submit(() -> {
-           while (running) {
-               try {
-                   Task task = taskQueue.poll();
-                   if (task != null) {
-                       processTask(task);
-                   } else {
-                       Thread.sleep(100);
-                   }
-               } catch (InterruptedException e) {
-                   Thread.currentThread().interrupt();
-                   break;
-               }
-           }
-       });
-   }
+    private void startTaskProcessor() {
+    executor.submit(() -> {
+        while (running) {
+            try {
+                Task task = taskQueue.poll();
+                if (task != null) {
+                    processTask(task);
+                } else {
+                    Thread.sleep(500); // ✅ Increase sleep time to avoid excessive CPU usage
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    });
+    }
+
+
 
 
    private void processTask(Task task) {
