@@ -66,8 +66,6 @@ public class FilePermissionsController {
         }
     }
     
-    
-
 
     private void setupUserSelectionHandler() {
         userComboBox.setOnAction(event -> {
