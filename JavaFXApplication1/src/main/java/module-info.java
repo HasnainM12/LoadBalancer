@@ -9,7 +9,7 @@ module com.mycompany.javafxapplication1 {
     requires java.desktop;
     requires transitive org.eclipse.paho.client.mqttv3;
     requires jsch; // Use only the automatic module name assigned to the JSch jar.
-    requires org.json;
+    requires  transitive org.json;
     
 
     opens com.mycompany.javafxapplication1 to javafx.fxml, javafx.graphics, javafx.base;

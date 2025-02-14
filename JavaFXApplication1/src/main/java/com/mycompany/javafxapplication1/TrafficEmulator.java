@@ -55,20 +55,23 @@ public class TrafficEmulator {
 }
 
 
-   private void handleNewTask(JSONObject taskData) {
-       String taskId = taskData.getString("taskId");
-       taskStates.put(taskId, TaskState.QUEUED);
-       retryCount.put(taskId, 0);
-       
-       Task task = new Task(
-           taskId,
-           taskData.getString("operation"),
-           calculateDelay(taskData.getString("operation"))
-       );
-       
-       taskQueue.offer(task);
-       publishTaskStatus(taskId, "queued");
-   }
+    private void handleNewTask(JSONObject taskData) {
+        String taskId = taskData.getString("taskId");
+        System.out.println("[DEBUG] Received Task: " + taskData.toString()); // 🔍 Debugging line
+
+        taskStates.put(taskId, TaskState.QUEUED);
+        retryCount.put(taskId, 0);
+
+        Task task = new Task(
+            taskId,
+            taskData.getString("operation"),
+            calculateDelay(taskData.getString("operation"))
+        );
+
+        taskQueue.offer(task);
+        publishTaskStatus(taskId, "queued");
+}
+
 
    private long calculateDelay(String operation) {
        int baseDelay = 30;
@@ -94,22 +97,30 @@ public class TrafficEmulator {
        });
    }
 
+
    private void processTask(Task task) {
-       try {
-           taskStates.put(task.getTaskId(), TaskState.PROCESSING);
-           publishTaskStatus(task.getTaskId(), "processing");
-           
-           Thread.sleep(task.getDelay());
-           
-           if (new Random().nextDouble() < 0.9) { // 90% success rate
-               completeTask(task);
-           } else {
-               failTask(task);
-           }
-       } catch (Exception e) {
-           handleTaskError(task, e);
-       }
-   }
+    try {
+        if (!mqttClient.isConnected()) {
+            System.err.println("[ERROR] TrafficEmulator not connected to MQTT! Retrying...");
+            connect();
+            return;
+        }
+
+        taskStates.put(task.getTaskId(), TaskState.PROCESSING);
+        publishTaskStatus(task.getTaskId(), "processing");
+
+        Thread.sleep(task.getDelay());
+
+        if (new Random().nextDouble() < 0.9) { // 90% success rate
+            completeTask(task);
+        } else {
+            failTask(task);
+        }
+    } catch (Exception e) {
+        handleTaskError(task, e);
+    }
+}
+
 
    private void completeTask(Task task) {
        taskStates.put(task.getTaskId(), TaskState.COMPLETED);

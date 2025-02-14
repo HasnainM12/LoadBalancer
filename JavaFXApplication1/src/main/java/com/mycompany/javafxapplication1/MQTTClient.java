@@ -47,14 +47,21 @@ public class MQTTClient {
 
     public void publish(String topic, JSONObject payload) {
         try {
+            if (!client.isConnected()) {
+                System.err.println("[ERROR] MQTT Client not connected, attempting reconnection...");
+                connect(); // Reconnect if needed
+            }
+    
             MqttMessage message = new MqttMessage(payload.toString().getBytes());
             message.setQos(1);
             client.publish(topic, message);
             System.out.println("[MQTT] Published to " + topic + ": " + payload);
+    
         } catch (MqttException e) {
             System.err.println("[ERROR] Publish failed: " + e.getMessage());
         }
     }
+    
 
     public void subscribe(String topic, IMqttMessageListener listener) {
         try {

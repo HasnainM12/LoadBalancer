@@ -55,7 +55,7 @@ public class LoadBalancer {
 
 
  
-    private enum TaskState {
+    public enum TaskState {
         WAITING,
         PROCESSING, 
         COMPLETED,
@@ -81,6 +81,7 @@ public class LoadBalancer {
         startRequestProcessor();
         startTaskMonitor();
         startHealthChecks();
+        startStuckTaskMonitor();
      }
 
 
@@ -103,22 +104,45 @@ public class LoadBalancer {
     }
      
     
-
     public void submitTask(JSONObject taskData) {
         String taskId = taskData.getString("taskId");
+        String operation = taskData.getString("operation");
+        String filename = taskData.getString("filename");
+    
+        // Extract file size if available
+        long fileSize = taskData.has("size") ? taskData.getLong("size") : 0;
+    
+        // Convert JSONObject into a FileOperation
+        FileOperation fileOp = new FileOperation(filename, FileOperation.OperationType.valueOf(operation), fileSize);
+    
         taskStates.put(taskId, TaskState.WAITING);
         taskTimestamps.put(taskId, System.currentTimeMillis());
-        
+    
         try {
-            mqttClient.publishTask("waiting", taskId, 
-                taskData.getString("operation"),
-                taskData.getString("filename"));
-                
+            mqttClient.publishTask("waiting", taskId, operation, filename);
             logger.log(SystemLogger.LogLevel.INFO, "Task submitted: " + taskId);
+    
+            // ✅ Now call the correct method with FileOperation
+            switch (operation) {
+                case "UPLOAD":
+                    processFileUpload(fileOp);
+                    break;
+                case "DOWNLOAD":
+                    processFileDownload(fileOp);
+                    break;
+                case "DELETE":
+                    processFileDelete(fileOp);
+                    break;
+                default:
+                    logger.log(SystemLogger.LogLevel.ERROR, "Unknown operation: " + operation);
+            }
+    
         } catch (Exception e) {
             handleTaskError(taskId, e);
         }
-     }
+    }
+    
+    
 
      private void handleTaskMessage(String topic, MqttMessage message) {
         try {
@@ -270,25 +294,39 @@ public class LoadBalancer {
     
 
     private void processFileUpload(FileOperation operation) {
-        String container = getNextWorker();
+        String taskId = UUID.randomUUID().toString();
+        String container = getNextWorker();  // Get next storage container
+        
         if (container == null) {
             System.err.println("[ERROR] No available storage containers!");
+            mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
             return;
         }
+
+        long delay = calculateDelay(operation.getType());
+        taskProcessingTimestamps.put(taskId, System.currentTimeMillis() + delay);
+
     
-        // Map container names to their hostnames in Docker network
+        // ✅ Map container names to their hostnames in Docker network
         Map<String, String> containerHosts = Map.of(
             "comp20081-files1", "comp20081-files1",
             "comp20081-files2", "comp20081-files2",
             "comp20081-files3", "comp20081-files3",
             "comp20081-files4", "comp20081-files4"
         );
-                
+    
         System.out.println("[DEBUG] Selected container: " + container);
         System.out.println("[DEBUG] Filename: " + operation.getFilename());
         System.out.println("[DEBUG] File path: " + operation.getFilePath());
     
+        // ✅ Mark task as "PROCESSING"
+        taskStates.put(taskId, TaskState.PROCESSING);
+        mqttClient.publishTask("processing", taskId, "UPLOAD", operation.getFilename());
+    
         try {
+
+            Thread.sleep(delay);
+            // ✅ Establish SFTP connection
             JSch jsch = new JSch();
             com.jcraft.jsch.Session sshSession = jsch.getSession("ntu-user", containerHosts.get(container), 22);
             sshSession.setPassword("ntu-user");
@@ -303,9 +341,11 @@ public class LoadBalancer {
             channel.connect(5000);
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
+            // ✅ Upload the file
             String remoteFilePath = "/files/" + operation.getFilename();
             sftpChannel.put(operation.getFilePath(), remoteFilePath);
     
+            // ✅ Store metadata in DB
             FileDB fileDB = new FileDB();
             Long fileId = fileDB.addFileMetadata(
                 operation.getFilename(),
@@ -315,57 +355,53 @@ public class LoadBalancer {
     
             System.out.println("[INFO] File uploaded to container " + container + " with ID: " + fileId);
     
+            // ✅ Mark task as "COMPLETED"
+            taskStates.put(taskId, TaskState.COMPLETED);
+            mqttClient.publishTask("completed", taskId, "UPLOAD", operation.getFilename());
+    
+            // ✅ Cleanup
             sftpChannel.exit();
             sshSession.disconnect();
     
         } catch (Exception e) {
+            // ✅ Handle failures and retries
             System.err.println("[ERROR] File upload failed: " + e.getMessage());
             e.printStackTrace();
+    
+            // Mark task as "FAILED" and notify MQTT
+            taskStates.put(taskId, TaskState.ERROR);
+            mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
         }
     }
+    
 
-    //doesn't work
     private String getNextWorker() {
-        List<String> availableContainers = storageContainers.stream()
-            .filter(container -> {
-                boolean isHealthy = containerHealth.getOrDefault(container, false);
-                int currentLoad = containerLoad.getOrDefault(container, 0);
-                return isHealthy && currentLoad < MAX_CONTAINER_LOAD;
-            })
+        List<String> healthyContainers = storageContainers.stream()
+            .filter(container -> containerHealth.getOrDefault(container, false))
             .collect(Collectors.toList());
- 
-        if (availableContainers.isEmpty()) {
+    
+        if (healthyContainers.isEmpty()) {
             logger.log(SystemLogger.LogLevel.ERROR, "No healthy containers available");
             return null;
         }
- 
+    
         switch (schedulingAlgorithm) {
             case FCFS:
-                return availableContainers.get(0);
-                
+                return healthyContainers.get(0); // ✅ First-come, first-served
+    
             case SJN:
-                return availableContainers.stream()
-                    .min(Comparator.comparingInt(container -> {
-                        int currentLoad = containerLoad.getOrDefault(container, 0);
-                        int queuedTasks = getQueuedTaskCount(container);
-                        return currentLoad + queuedTasks;
-                    }))
-                    .orElse(availableContainers.get(0));
-                
+                return getLeastLoadedWorker(healthyContainers); // ✅ Uses least loaded worker
+    
             case ROUND_ROBIN:
-                if (roundRobinIndex >= availableContainers.size()) {
-                    roundRobinIndex = 0;
-                }
-                String selectedContainer = availableContainers.get(roundRobinIndex);
-                roundRobinIndex = (roundRobinIndex + 1) % availableContainers.size();
-                return selectedContainer;
-                
+                return getNextRoundRobinWorker(healthyContainers); // ✅ Uses round-robin
+    
             default:
-                logger.log(SystemLogger.LogLevel.WARN, 
-                    "Unknown scheduling algorithm, defaulting to FCFS");
-                return availableContainers.get(0);
+                logger.log(SystemLogger.LogLevel.WARN, "Unknown scheduling algorithm, defaulting to FCFS");
+                return healthyContainers.get(0);
         }
     }
+    
+    
 
     private int getQueuedTaskCount(String container) {
         return (int) taskStates.entrySet().stream()
@@ -388,26 +424,32 @@ public class LoadBalancer {
     private String getLeastLoadedWorker(List<String> healthyContainers) {
         return healthyContainers.stream()
             .min(Comparator.comparingInt(containerLoad::get))
-            .orElse(healthyContainers.get(0));
+            .orElse(null); // ✅ Now returns `null` if no workers are available
     }
     
+    
     private synchronized String getNextRoundRobinWorker(List<String> healthyContainers) {
-        if (healthyContainers.isEmpty()) return null;
+        if (healthyContainers.isEmpty()) return null; // ✅ Return `null` if no workers
+    
+        if (roundRobinIndex >= healthyContainers.size()) { // ✅ Reset if index is out of bounds
+            roundRobinIndex = 0;
+        }
+    
         String worker = healthyContainers.get(roundRobinIndex);
         roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
         return worker;
     }
     
-        
+    
     public void handleMessage(String topic, String message) {
         switch (topic) {
-            case "loadbalancer/processing":
+            case "task/processing":
                 markTaskAsProcessing(message);
                 break;
-            case "loadbalancer/completed":
+            case "task/completed":
                 markTaskAsCompleted(message);
                 break;
-            case "loadbalancer/task/complete":
+            case "task/complete": // ✅ Ensure consistency
                 System.out.println("[LoadBalancer] Task completion notification received: " + message);
                 break;
             default:
@@ -415,6 +457,7 @@ public class LoadBalancer {
                 break;
         }
     }
+    
     
 
     private String extractTaskId(String message) {
@@ -449,7 +492,6 @@ public class LoadBalancer {
         }
     }
     
-
     private void checkForStuckTasks() {
         long currentTime = System.currentTimeMillis();
         long timeout = 60_000; // 60 seconds timeout for stuck tasks
@@ -459,11 +501,18 @@ public class LoadBalancer {
             if (currentTime - startTime > timeout) {
                 System.out.println("[WARNING] Task " + taskId + " is stuck. Reassigning...");
     
-                // Reassign the task
+                // ✅ Reassign the task
                 reassignTask(taskId);
             }
         }
     }
+    
+
+    private void startStuckTaskMonitor() {
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.scheduleAtFixedRate(this::checkForStuckTasks, 30, 30, TimeUnit.SECONDS);
+    }
+    
 
     private void reassignTask(String taskId) {
         String newWorker = getNextWorker();
@@ -480,13 +529,14 @@ public class LoadBalancer {
     
         System.out.println("[LoadBalancer] Reassigning task " + taskId + " to " + newWorker);
     
-        // ✅ Publish to MQTT
-        mqttClient.publish("loadbalancer/waiting", reassignedTask);
+        // ✅ Publish to the correct MQTT topic
+        mqttClient.publish("task/retry", reassignedTask);
     
         // ✅ Update worker load tracking
         workerLoad.put(newWorker, workerLoad.getOrDefault(newWorker, 0) + 1);
         taskProcessingTimestamps.put(taskId, System.currentTimeMillis()); // Reset timer
     }
+    
     
     
     private void markTaskAsCompleted(String message) {
