@@ -128,7 +128,7 @@ public class LoadBalancer {
             mqttClient.publishTask("waiting", taskId, operation, filename);
             logger.log(SystemLogger.LogLevel.INFO, "Task submitted: " + taskId);
     
-            // ✅ Now call the correct method with FileOperation
+            //  Now call the correct method with FileOperation
             switch (operation) {
                 case "UPLOAD":
                     processFileUpload(fileOp, taskId);
@@ -226,7 +226,7 @@ public class LoadBalancer {
                 .put("worker", newWorker)
                 .put("status", "RETRY");
                 
-            mqttClient.publish("task/waiting", retryMsg); // ✅ Pass JSONObject directly
+            mqttClient.publish("task/waiting", retryMsg); //  Pass JSONObject directly
             taskTimestamps.put(taskId, System.currentTimeMillis());
             workerLoad.put(newWorker, workerLoad.getOrDefault(newWorker, 0) + 1);
             
@@ -429,13 +429,13 @@ public class LoadBalancer {
     
         switch (schedulingAlgorithm) {
             case FCFS:
-                return healthyContainers.get(0); // ✅ First-come, first-served
+                return healthyContainers.get(0); // First-come, first-served
     
             case SJN:
-                return getLeastLoadedWorker(healthyContainers); // ✅ Uses least loaded worker
+                return getLeastLoadedWorker(healthyContainers); // Uses least loaded worker
     
             case ROUND_ROBIN:
-                return getNextRoundRobinWorker(healthyContainers); // ✅ Uses round-robin
+                return getNextRoundRobinWorker(healthyContainers); // Uses round-robin
     
             default:
                 logger.log(SystemLogger.LogLevel.WARN, "Unknown scheduling algorithm, defaulting to FCFS");
@@ -491,7 +491,7 @@ public class LoadBalancer {
             case "task/completed":
                 markTaskAsCompleted(message);
                 break;
-            case "task/complete": // ✅ Ensure consistency
+            case "task/complete": 
                 System.out.println("[LoadBalancer] Task completion notification received: " + message);
                 break;
             default:
@@ -527,7 +527,7 @@ public class LoadBalancer {
             taskStates.put(taskId, TaskState.PROCESSING);
             taskProcessingTimestamps.put(taskId, System.currentTimeMillis());
     
-            // ✅ Log task start in the database
+            //Log task start in the database
             logTaskHistory(taskId, worker, "PROCESSING");
     
             System.out.println("[LoadBalancer] Task is now processing: " + taskId);
@@ -543,7 +543,7 @@ public class LoadBalancer {
             if (currentTime - startTime > timeout) {
                 System.out.println("[WARNING] Task " + taskId + " is stuck. Reassigning...");
     
-                // ✅ Reassign the task
+                //  Reassign the task
                 reassignTask(taskId);
             }
         }
@@ -563,7 +563,7 @@ public class LoadBalancer {
             return;
         }
     
-        // ✅ Create JSON object correctly
+        // Create JSON object correctly
         JSONObject reassignedTask = new JSONObject()
             .put("taskId", taskId)
             .put("worker", newWorker)
@@ -571,10 +571,10 @@ public class LoadBalancer {
     
         System.out.println("[LoadBalancer] Reassigning task " + taskId + " to " + newWorker);
     
-        // ✅ Publish to the correct MQTT topic
+        // Publish to the correct MQTT topic
         mqttClient.publish("task/retry", reassignedTask);
     
-        // ✅ Update worker load tracking
+        // Update worker load tracking
         workerLoad.put(newWorker, workerLoad.getOrDefault(newWorker, 0) + 1);
         taskProcessingTimestamps.put(taskId, System.currentTimeMillis()); // Reset timer
     }
@@ -588,7 +588,7 @@ public class LoadBalancer {
             taskStates.remove(taskId);
             taskProcessingTimestamps.remove(taskId);
     
-            // ✅ Log task completion in the database
+            //  Log task completion in the database
             logTaskHistory(taskId, worker, "COMPLETED");
     
             System.out.println("[LoadBalancer] Task completed and removed: " + taskId);

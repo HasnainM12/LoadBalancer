@@ -163,9 +163,6 @@ public class SecondaryController {
         progressDialog.show();
         new Thread(downloadTask).start();
 
-        // (Optionally, after the MQTT "completed" message is received,
-        // you can prompt the user with a FileChooser to select a save location
-        // and then copy the downloaded file from the container.)
     }
 
 
@@ -218,8 +215,6 @@ public class SecondaryController {
             progressDialog.show();
             new Thread(deleteTask).start();
 
-            // The MQTT "completed" message will indicate deletion success,
-            // after which you can refresh the file list.
         }
     }
 
@@ -243,7 +238,7 @@ public class SecondaryController {
                 throw new RuntimeException("Controller is null! FXML file may be broken.");
             }
 
-            // ✅ Pass file ID, filename, and owner to the editor
+            //  Pass file ID, filename, and owner to the editor
             controller.setupEditor(selectedFile.getId(), selectedFile.getFilename(), selectedFile.getOwner());
 
             Stage editorStage = new Stage();

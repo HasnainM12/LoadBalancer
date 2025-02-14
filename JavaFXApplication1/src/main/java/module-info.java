@@ -8,7 +8,7 @@ module com.mycompany.javafxapplication1 {
     requires java.logging;
     requires java.desktop;
     requires transitive org.eclipse.paho.client.mqttv3;
-    requires jsch; // Use only the automatic module name assigned to the JSch jar.
+    requires jsch; 
     requires  transitive org.json;
     
 

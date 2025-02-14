@@ -110,7 +110,7 @@ public class ProgressDialog extends Dialog<Void> {
             mqttClient.unsubscribe("task/failed");
             mqttClient.disconnect();
         }
-        super.setResult(null); // Close the dialog safely
+        super.setResult(null);
     }
     
 }

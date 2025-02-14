@@ -33,7 +33,7 @@ public class FilePermissionsController {
         this.filename = filename;
         this.owner = owner;
 
-        // ✅ Ensure userDB is initialized before calling loadUsers()
+        // Ensure userDB is initialized before calling loadUsers()
         initialise();
 
         if (Session.getInstance().isAdmin() || owner.equals(Session.getInstance().getUsername())) {

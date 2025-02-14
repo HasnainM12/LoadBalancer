@@ -126,7 +126,7 @@ public class FileDB {
 
     public boolean verifyFileInContainer(String container, String remotePath) {
         try {
-            // ✅ SSH directly into the container and check if the file exists
+            // SSH directly into the container and check if the file exists
             JSch jsch = new JSch();
             Session sshSession = jsch.getSession("ntu-user", container, 22);
             sshSession.setPassword("ntu-user");
@@ -138,7 +138,7 @@ public class FileDB {
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
             try {
-                sftpChannel.lstat(remotePath); // ✅ Directly check in `/files/`
+                sftpChannel.lstat(remotePath); // Directly check in `/files/`
                 return true;
             } catch (SftpException e) {
                 return false;
@@ -225,7 +225,7 @@ public class FileDB {
                 return null;
             }
     
-            // ✅ Directly read the file (no decryption)
+            //  Directly read the file (no decryption)
             return new String(Files.readAllBytes(path));
         } catch (Exception e) {
             logger.logError("Error retrieving file: " + filePath, e);
