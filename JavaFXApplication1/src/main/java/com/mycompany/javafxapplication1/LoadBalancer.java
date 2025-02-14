@@ -116,6 +116,10 @@ public class LoadBalancer {
     
         // Convert JSONObject into a FileOperation
         FileOperation fileOp = new FileOperation(filename, FileOperation.OperationType.valueOf(operation), fileSize);
+        
+        if (taskData.has("filePath")) {
+        fileOp.setFilePath(taskData.getString("filePath"));
+        }
     
         taskStates.put(taskId, TaskState.WAITING);
         taskTimestamps.put(taskId, System.currentTimeMillis());
@@ -127,7 +131,7 @@ public class LoadBalancer {
             // ✅ Now call the correct method with FileOperation
             switch (operation) {
                 case "UPLOAD":
-                    processFileUpload(fileOp);
+                    processFileUpload(fileOp, taskId);
                     break;
                 case "DOWNLOAD":
                     processFileDownload(fileOp);
@@ -295,21 +299,19 @@ public class LoadBalancer {
     }
     
 
-    private void processFileUpload(FileOperation operation) {
-        String taskId = UUID.randomUUID().toString();
-        String container = getNextWorker();  // Get next storage container
-        
+    private void processFileUpload(FileOperation operation, String taskId) {
+        String container = getNextWorker(); // Get next storage container
+    
         if (container == null) {
             System.err.println("[ERROR] No available storage containers!");
             mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
             return;
         }
-
+    
         long delay = calculateDelay(operation.getType());
         taskProcessingTimestamps.put(taskId, System.currentTimeMillis() + delay);
-
     
-        // ✅ Map container names to their hostnames in Docker network
+        // Map container names to their hostnames in the Docker network
         Map<String, String> containerHosts = Map.of(
             "comp20081-files1", "comp20081-files1",
             "comp20081-files2", "comp20081-files2",
@@ -321,33 +323,31 @@ public class LoadBalancer {
         System.out.println("[DEBUG] Filename: " + operation.getFilename());
         System.out.println("[DEBUG] File path: " + operation.getFilePath());
     
-        // ✅ Mark task as "PROCESSING"
+        // Mark task as "PROCESSING"
         taskStates.put(taskId, TaskState.PROCESSING);
         mqttClient.publishTask("processing", taskId, "UPLOAD", operation.getFilename());
     
         try {
-
             Thread.sleep(delay);
-            // ✅ Establish SFTP connection
+    
+            // Establish SFTP connection
             JSch jsch = new JSch();
             com.jcraft.jsch.Session sshSession = jsch.getSession("ntu-user", containerHosts.get(container), 22);
             sshSession.setPassword("ntu-user");
-            
             java.util.Properties config = new java.util.Properties();
             config.put("StrictHostKeyChecking", "no");
             sshSession.setConfig(config);
-            
             sshSession.connect(10000);
     
             Channel channel = sshSession.openChannel("sftp");
             channel.connect(5000);
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
-            // ✅ Upload the file
+            // Upload the file
             String remoteFilePath = "/files/" + operation.getFilename();
             sftpChannel.put(operation.getFilePath(), remoteFilePath);
     
-            // ✅ Store metadata in DB
+            // Store metadata in DB
             FileDB fileDB = new FileDB();
             Long fileId = fileDB.addFileMetadata(
                 operation.getFilename(),
@@ -357,22 +357,24 @@ public class LoadBalancer {
     
             System.out.println("[INFO] File uploaded to container " + container + " with ID: " + fileId);
     
-            // ✅ Mark task as "COMPLETED"
+            // Mark task as "COMPLETED"
             taskStates.put(taskId, TaskState.COMPLETED);
             mqttClient.publishTask("completed", taskId, "UPLOAD", operation.getFilename());
+            logger.log(SystemLogger.LogLevel.INFO, "File uploaded successfully for task " + taskId);
     
-            // ✅ Cleanup
+            // Cleanup
             sftpChannel.exit();
             sshSession.disconnect();
     
         } catch (Exception e) {
-            // ✅ Handle failures and retries
+            // Handle failures and retries
             System.err.println("[ERROR] File upload failed: " + e.getMessage());
             e.printStackTrace();
     
             // Mark task as "FAILED" and notify MQTT
             taskStates.put(taskId, TaskState.ERROR);
             mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
+            handleTaskError(taskId, e);
         }
     }
     
