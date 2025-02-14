@@ -72,7 +72,7 @@ public class SecondaryController {
     private void handleUpload() {
         FileChooser fileChooser = new FileChooser();
         File file = fileChooser.showOpenDialog(null);
-
+    
         if (file != null) {
             try {
                 String taskId = UUID.randomUUID().toString();
@@ -80,11 +80,15 @@ public class SecondaryController {
                 ProgressDialog progressDialog = new ProgressDialog("Uploading File");
                 progressDialog.trackProgress(taskId);
                 
+                // Create FileOperation with the file path
+                FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
+                    .setFilePath(file.getAbsolutePath());
+                
                 JSONObject taskData = new JSONObject();
                 taskData.put("taskId", taskId);
                 taskData.put("operation", "UPLOAD");
                 taskData.put("filename", file.getName());
-                taskData.put("path", file.getAbsolutePath());
+                taskData.put("size", file.length());
                 
                 LoadBalancer.getInstance().submitTask(taskData);
                 
