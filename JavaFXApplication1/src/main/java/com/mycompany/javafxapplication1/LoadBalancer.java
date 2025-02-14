@@ -15,6 +15,7 @@ import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.JSch;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelExec;
 
 
 // Assuming these are
@@ -34,6 +35,8 @@ public class LoadBalancer {
     private final Map<String, Integer> workerLoad = new ConcurrentHashMap<>();
     private int roundRobinIndex = 0;
     private final Map<String, Long> taskProcessingTimestamps = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> containerHealth = new ConcurrentHashMap<>();
+    private static final int HEALTH_CHECK_INTERVAL = 10; // Seconds
     
     public enum SchedulingAlgorithm {
         FCFS, SJN, ROUND_ROBIN
@@ -219,20 +222,26 @@ public class LoadBalancer {
         return worker;
     }
     
-    
 
-    public String getNextWorker() {
-        if (storageContainers.isEmpty()) return null;
-    
+    private String getNextWorker() {
+        List<String> healthyContainers = storageContainers.stream()
+            .filter(container -> containerHealth.getOrDefault(container, false))
+            .collect(Collectors.toList());
+        
+        if (healthyContainers.isEmpty()) {
+            System.err.println("[ERROR] No healthy storage containers available!");
+            return null;
+        }
+        
         switch (schedulingAlgorithm) {
             case FCFS:
-                return getFirstAvailableWorker();
+                return healthyContainers.get(0);
             case SJN:
-                return getLeastLoadedWorker();
+                return getLeastLoadedWorker(healthyContainers);
             case ROUND_ROBIN:
-                return getNextRoundRobinWorker();
+                return getNextRoundRobinWorker(healthyContainers);
             default:
-                return getFirstAvailableWorker();
+                return healthyContainers.get(0);
         }
     }
         
@@ -389,6 +398,61 @@ public class LoadBalancer {
         return future;
     }
 
+    //HEALTH CONTAINER
+
+    private void startHealthChecks() {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.scheduleAtFixedRate(this::checkContainerHealth, 0, HEALTH_CHECK_INTERVAL, TimeUnit.SECONDS);
+    }
+    
+    private void checkContainerHealth() {
+        for (String container : storageContainers) {
+            boolean isHealthy = isContainerHealthy(container);
+            containerHealth.put(container, isHealthy);
+            
+            if (!isHealthy) {
+                System.err.println("[WARNING] Container " + container + " is unhealthy!");
+            }
+        }
+    }
+    
+    private boolean isContainerHealthy(String container) {
+        try {
+            JSch jsch = new JSch();
+            com.jcraft.jsch.Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect(5000);
+            
+            Channel channel = sshSession.openChannel("exec");
+            ((ChannelExec) channel).setCommand("ls /files");
+            channel.connect();
+            
+            boolean success = channel.isConnected();
+            channel.disconnect();
+            sshSession.disconnect();
+            
+            return success;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    private String getLeastLoadedWorker(List<String> healthyContainers) {
+        return healthyContainers.stream()
+            .min(Comparator.comparingInt(containerLoad::get))
+            .orElse(healthyContainers.get(0));
+    }
+    
+    private synchronized String getNextRoundRobinWorker(List<String> healthyContainers) {
+        if (healthyContainers.isEmpty()) return null;
+        String worker = healthyContainers.get(roundRobinIndex);
+        roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
+        return worker;
+    }
+
+    // END OF CONTAINER HEALTH
+
+
     private String processOperation(FileOperation operation) {
         String container = getNextAvailableContainer();
         logger.log(SystemLogger.LogLevel.INFO, "Container " + container + " selected for operation: " + operation.getType());
@@ -486,4 +550,5 @@ public class LoadBalancer {
         containerLoad.clear();
         instance = null;
     }
+
 }
