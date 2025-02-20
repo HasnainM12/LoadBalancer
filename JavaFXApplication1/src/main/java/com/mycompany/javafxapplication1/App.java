@@ -35,14 +35,6 @@ public class App extends Application {
                 throw new IOException("Failed to create storage directory");
             }
     
-            System.out.println("Creating container directories...");
-            for (int i = 1; i <= 4; i++) {
-                File containerDir = new File(storageDir, "container" + i);
-                if (!containerDir.exists() && !containerDir.mkdirs()) {
-                    throw new IOException("Failed to create container directory: " + containerDir);
-                }
-            }
-    
             System.out.println("[INFO] Ensuring databases exist...");
     
             // Ensure SQLite database file exists
