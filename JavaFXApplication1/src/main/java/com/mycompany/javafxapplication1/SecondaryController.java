@@ -165,11 +165,6 @@ public class SecondaryController {
 
     }
 
-
-    private String readFileContent(File file) throws Exception {
-        return new String(java.nio.file.Files.readAllBytes(file.toPath()));
-    }
-
     @FXML
     private void handleDelete() {
         UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
@@ -218,9 +213,6 @@ public class SecondaryController {
         }
     }
 
-    
-    
-    
     @FXML
     private void handleEditFile() {
         UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
@@ -272,7 +264,6 @@ public class SecondaryController {
             }
 
             controller.setupDialog(selectedFile.getId(), selectedFile.getFilename(), selectedFile.getOwner());
-
             Stage permissionsStage = new Stage();
             permissionsStage.setTitle("Share: " + selectedFile.getFilename());
             permissionsStage.setScene(new Scene(root));

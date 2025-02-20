@@ -92,7 +92,7 @@ public class TrafficEmulator {
                 if (task != null) {
                     processTask(task);
                 } else {
-                    Thread.sleep(500); // ✅ Increase sleep time to avoid excessive CPU usage
+                    Thread.sleep(500); //  Increase sleep time to avoid excessive CPU usage
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -4,17 +4,17 @@ public class FileOperation {
     private final String filename;
     private final OperationType type;
     private final long timestamp;
-    private final long size; // Add a size field
+    private final long size;
 
     public enum OperationType {
-        UPLOAD, DOWNLOAD, DELETE
+        UPLOAD, DOWNLOAD, DELETE, READ  // Added READ operation type
     }
 
     public FileOperation(String filename, OperationType type, long size) {
         this.filename = filename;
         this.type = type;
         this.timestamp = System.currentTimeMillis();
-        this.size = size; // Initialize the size field
+        this.size = size;
     }
 
     public String getFilename() { return filename; }
@@ -33,8 +33,9 @@ public class FileOperation {
             case UPLOAD: baseTime = 1000; break;
             case DOWNLOAD: baseTime = 800; break;
             case DELETE: baseTime = 500; break;
+            case READ: baseTime = 300; break;  // Added processing time for READ
             default: baseTime = 1000;
         }
-        return baseTime + (size / 1024 / 1024 * 100); // Time scales with file size
+        return baseTime + (size / 1024 / 1024 * 100);
     }
 }

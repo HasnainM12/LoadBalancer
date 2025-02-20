@@ -3,6 +3,7 @@ package com.mycompany.javafxapplication1;
 import com.mycompany.javafxapplication1.Session;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.io.File;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -111,14 +112,20 @@ public class LoadBalancer {
         String operation = taskData.getString("operation");
         String filename = taskData.getString("filename");
     
+        FileOperation.OperationType opType;
+        try {
+            opType = FileOperation.OperationType.valueOf(operation);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[ERROR] Invalid operation type: " + operation);
+            return;
+        }
+    
         // Extract file size if available
         long fileSize = taskData.has("size") ? taskData.getLong("size") : 0;
     
-        // Convert JSONObject into a FileOperation
-        FileOperation fileOp = new FileOperation(filename, FileOperation.OperationType.valueOf(operation), fileSize);
-        
+        FileOperation fileOp = new FileOperation(filename, opType, fileSize);
         if (taskData.has("filePath")) {
-        fileOp.setFilePath(taskData.getString("filePath"));
+            fileOp.setFilePath(taskData.getString("filePath"));
         }
     
         taskStates.put(taskId, TaskState.WAITING);
@@ -128,16 +135,18 @@ public class LoadBalancer {
             mqttClient.publishTask("waiting", taskId, operation, filename);
             logger.log(SystemLogger.LogLevel.INFO, "Task submitted: " + taskId);
     
-            //  Now call the correct method with FileOperation
-            switch (operation) {
-                case "UPLOAD":
+            switch (opType) {
+                case UPLOAD:
                     processFileUpload(fileOp, taskId);
                     break;
-                case "DOWNLOAD":
+                case DOWNLOAD:
                     processFileDownload(fileOp, taskId);
                     break;
-                case "DELETE":
+                case DELETE:
                     processFileDelete(fileOp, taskId);
+                    break;
+                case READ:
+                    processFileRead(fileOp, taskId);
                     break;
                 default:
                     logger.log(SystemLogger.LogLevel.ERROR, "Unknown operation: " + operation);
@@ -170,7 +179,7 @@ public class LoadBalancer {
         } catch (Exception e) {
             logger.log(SystemLogger.LogLevel.ERROR, "Failed to process message: " + e.getMessage());
         }
-     }
+    }
      
 
      public void handleTaskCompletion(String taskId) {
@@ -245,98 +254,62 @@ public class LoadBalancer {
     private void processFileDelete(FileOperation operation, String taskId) {
         FileDB fileDB = new FileDB();
         try {
-            // Retrieve file ID
             Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
             if (fileId == null) {
-                System.err.println("[ERROR] File ID not found for filename: " + operation.getFilename());
-                mqttClient.publishTask("failed", taskId, "DELETE", operation.getFilename());
-                return;
-            }
-    
-            // Retrieve file path
-            String filePath = fileDB.getFilePath(fileId);
-            if (filePath == null || !Files.exists(Paths.get(filePath))) {
-                System.err.println("[ERROR] File not found: " + operation.getFilename());
-                mqttClient.publishTask("failed", taskId, "DELETE", operation.getFilename());
-                return;
+                throw new Exception("File ID not found for filename: " + operation.getFilename());
             }
     
             // Mark task as "PROCESSING"
             taskStates.put(taskId, TaskState.PROCESSING);
             mqttClient.publishTask("processing", taskId, "DELETE", operation.getFilename());
     
-            // Simulate delay for deletion operation
-            long delay = calculateDelay(operation.getType());
-            Thread.sleep(delay);
-    
-            // Delete the file from storage
-            Files.delete(Paths.get(filePath));
-    
-            // Remove file metadata from the database
-            fileDB.deleteFileMetadata(fileId);
-    
-            System.out.println("[INFO] File deleted successfully: " + operation.getFilename());
-    
-            // Mark task as "COMPLETED"
-            taskStates.put(taskId, TaskState.COMPLETED);
-            mqttClient.publishTask("completed", taskId, "DELETE", operation.getFilename());
+            if (fileDB.deleteFile(fileId)) {
+                taskStates.put(taskId, TaskState.COMPLETED);
+                mqttClient.publishTask("completed", taskId, "DELETE", operation.getFilename());
+            } else {
+                throw new Exception("Delete failed");
+            }
         } catch (Exception e) {
             System.err.println("[ERROR] File deletion failed: " + e.getMessage());
-            e.printStackTrace();
             taskStates.put(taskId, TaskState.ERROR);
             mqttClient.publishTask("failed", taskId, "DELETE", operation.getFilename());
             handleTaskError(taskId, e);
         }
     }
     
-
-    
-
     private void processFileDownload(FileOperation operation, String taskId) {
         FileDB fileDB = new FileDB();
         try {
-            // Retrieve file ID
             Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
             if (fileId == null) {
-                System.err.println("[ERROR] File ID not found for filename: " + operation.getFilename());
-                mqttClient.publishTask("failed", taskId, "DOWNLOAD", operation.getFilename());
-                return;
+                throw new Exception("File ID not found for filename: " + operation.getFilename());
             }
-    
-            // Retrieve file path
-            String filePath = fileDB.getFilePath(fileId);
-            if (filePath == null || !Files.exists(Paths.get(filePath))) {
-                System.err.println("[ERROR] File not found: " + operation.getFilename());
-                mqttClient.publishTask("failed", taskId, "DOWNLOAD", operation.getFilename());
-                return;
-            }
-    
-            System.out.println("[DEBUG] File path for download: " + filePath);
     
             // Mark task as "PROCESSING"
             taskStates.put(taskId, TaskState.PROCESSING);
             mqttClient.publishTask("processing", taskId, "DOWNLOAD", operation.getFilename());
     
-            // Simulate delay for download operation
-            long delay = calculateDelay(operation.getType());
-            Thread.sleep(delay);
+            // Create downloads directory if it doesn't exist
+            File downloadsDir = new File("downloads");
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs();
+            }
     
-            System.out.println("[INFO] File ready for download: " + filePath);
-    
-            // Mark task as "COMPLETED"
-            taskStates.put(taskId, TaskState.COMPLETED);
-            mqttClient.publishTask("completed", taskId, "DOWNLOAD", operation.getFilename());
+            String localPath = "downloads/" + operation.getFilename();
+            if (fileDB.downloadFile(fileId, localPath)) {
+                taskStates.put(taskId, TaskState.COMPLETED);
+                mqttClient.publishTask("completed", taskId, "DOWNLOAD", operation.getFilename());
+            } else {
+                throw new Exception("Download failed");
+            }
         } catch (Exception e) {
             System.err.println("[ERROR] File download failed: " + e.getMessage());
-            e.printStackTrace();
             taskStates.put(taskId, TaskState.ERROR);
             mqttClient.publishTask("failed", taskId, "DOWNLOAD", operation.getFilename());
             handleTaskError(taskId, e);
         }
     }
     
-    
-
     private void processFileUpload(FileOperation operation, String taskId) {
         String container = getNextWorker(); // Get next storage container
     
@@ -412,6 +385,40 @@ public class LoadBalancer {
             // Mark task as "FAILED" and notify MQTT
             taskStates.put(taskId, TaskState.ERROR);
             mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
+            handleTaskError(taskId, e);
+        }
+    }
+
+    private void processFileRead(FileOperation operation, String taskId) {
+        FileDB fileDB = new FileDB();
+        try {
+            Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
+            if (fileId == null) {
+                throw new Exception("File ID not found for filename: " + operation.getFilename());
+            }
+    
+            String containerPath = fileDB.getFilePath(fileId);
+            if (containerPath == null) {
+                throw new Exception("File path not found: " + operation.getFilename());
+            }
+    
+            // Mark task as processing
+            taskStates.put(taskId, TaskState.PROCESSING);
+            mqttClient.publishTask("processing", taskId, "READ", operation.getFilename());
+    
+            // Get file content
+            String content = fileDB.getFileContent(containerPath);
+            if (content != null) {
+                taskStates.put(taskId, TaskState.COMPLETED);
+                mqttClient.publishTask("completed", taskId, "READ", operation.getFilename());
+            } else {
+                throw new Exception("Failed to read file content");
+            }
+    
+        } catch (Exception e) {
+            System.err.println("[ERROR] File read failed: " + e.getMessage());
+            taskStates.put(taskId, TaskState.ERROR);
+            mqttClient.publishTask("failed", taskId, "READ", operation.getFilename());
             handleTaskError(taskId, e);
         }
     }

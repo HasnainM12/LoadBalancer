@@ -13,7 +13,7 @@ import java.sql.*;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-
+import java.io.File;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.Session;
 import com.jcraft.jsch.ChannelSftp;
@@ -154,6 +154,55 @@ public class FileDB {
             return false;
         }
     }
+
+
+    public boolean verifyFileExists(String containerPath) {
+        String[] parts = containerPath.split(":");
+        if (parts.length != 2) {
+            logger.logError("Invalid file path format: " + containerPath, null);
+            return false;
+        }
+    
+        String container = parts[0];
+        String remotePath = parts[1];
+    
+        JSch jsch = new JSch();
+        Session session = null;
+        ChannelSftp sftpChannel = null;
+    
+        try {
+            session = jsch.getSession("ntu-user", container, 22);
+            session.setPassword("ntu-user");
+            session.setConfig("StrictHostKeyChecking", "no");
+            session.connect(5000);
+    
+            Channel channel = session.openChannel("sftp");
+            channel.connect(5000);
+            sftpChannel = (ChannelSftp) channel;
+    
+            // Try to get file attributes - will throw exception if file doesn't exist
+            sftpChannel.lstat(remotePath);
+            return true;
+        } catch (Exception e) {
+            logger.logError("Failed to verify file existence: " + containerPath, e);
+            return false;
+        } finally {
+            if (sftpChannel != null) {
+                try {
+                    sftpChannel.exit();
+                } catch (Exception e) {
+                    logger.logError("Error closing SFTP channel", e);
+                }
+            }
+            if (session != null) {
+                try {
+                    session.disconnect();
+                } catch (Exception e) {
+                    logger.logError("Error closing SSH session", e);
+                }
+            }
+        }
+    }
     
 
     Long addFileMetadata(String filename, String owner, String filePath) {
@@ -231,18 +280,49 @@ public class FileDB {
         return null;
     }
     
-    public String getFileContent(String filePath) {
-        try {
-            Path path = Paths.get(filePath);
-            if (!Files.exists(path)) {
-                logger.logError("File not found: " + filePath, null);
-                return null;
-            }
+    public String getFileContent(String containerPath) {
+        String[] pathParts = containerPath.split(":");
+        if (pathParts.length != 2) {
+            logger.logError("Invalid file path format: " + containerPath, null);
+            return null;
+        }
     
-            //  Directly read the file (no decryption)
-            return new String(Files.readAllBytes(path));
+        String container = pathParts[0];
+        String remotePath = pathParts[1];
+    
+        // Create a temporary file to store the downloaded content
+        File tempFile = null;
+        try {
+            tempFile = File.createTempFile("download", ".tmp");
+            
+            JSch jsch = new JSch();
+            Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect(5000);
+    
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect(5000);
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
+    
+            try {
+                // Download the file to temp location
+                sftpChannel.get(remotePath, tempFile.getAbsolutePath());
+                
+                // Read the content
+                return new String(Files.readAllBytes(tempFile.toPath()));
+            } finally {
+                sftpChannel.exit();
+                sshSession.disconnect();
+                if (tempFile != null) {
+                    tempFile.delete(); // Clean up temp file
+                }
+            }
         } catch (Exception e) {
-            logger.logError("Error retrieving file: " + filePath, e);
+            logger.logError("Error retrieving file content: " + containerPath, e);
+            if (tempFile != null) {
+                tempFile.delete(); // Ensure temp file is cleaned up on error
+            }
             return null;
         }
     }
@@ -261,28 +341,110 @@ public class FileDB {
         }
         return null;
     }
-    
 
-    public boolean deleteFile(Long fileId) {
-        try (Connection conn = DBConnection.getMySQLConnection()) {
-            String query = "DELETE FROM Files WHERE id = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(query)) {
-                stmt.setLong(1, fileId);
-                String path = getFilePath(fileId);
-                int result = stmt.executeUpdate();
-                if (result > 0) {
-                    Files.delete(Paths.get(path));
-                    logger.log(SystemLogger.LogLevel.INFO, "File deleted - ID: " + fileId);
-                    return true;
-                }
-                logger.log(SystemLogger.LogLevel.WARN, "File not found - ID: " + fileId);
-                return false;
-            }
-        } catch (SQLException | IOException e) {
-            logger.log(SystemLogger.LogLevel.ERROR, "Error deleting file: " + e.getMessage());
+
+
+    public boolean downloadFile(Long fileId, String localPath) {
+        String containerPath = getFilePath(fileId);
+        if (containerPath == null) {
+            logger.logError("File path not found for ID: " + fileId, null);
             return false;
         }
-     }     
+    
+        String[] pathParts = containerPath.split(":");
+        if (pathParts.length != 2) {
+            logger.logError("Invalid file path format: " + containerPath, null);
+            return false;
+        }
+    
+        String container = pathParts[0];
+        String remotePath = pathParts[1];
+    
+        try {
+            JSch jsch = new JSch();
+            Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect(5000);
+    
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect(5000);
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
+    
+            // Create parent directory if it doesn't exist
+            File localFile = new File(localPath);
+            if (!localFile.getParentFile().exists()) {
+                localFile.getParentFile().mkdirs();
+            }
+
+            if (!verifyFileExists(containerPath)) {
+                logger.logError("File does not exist: " + containerPath, null);
+                return false;
+            }
+    
+            // Download the file
+            sftpChannel.get(remotePath, localPath);
+    
+            sftpChannel.exit();
+            sshSession.disconnect();
+            return true;
+        } catch (Exception e) {
+            logger.logError("Failed to download file", e);
+            return false;
+        }
+    }
+    
+    public boolean deleteFile(Long fileId) {
+        String containerPath = getFilePath(fileId);
+        if (containerPath == null) {
+            logger.logError("File path not found for ID: " + fileId, null);
+            return false;
+        }
+    
+        String[] pathParts = containerPath.split(":");
+        if (pathParts.length != 2) {
+            logger.logError("Invalid file path format: " + containerPath, null);
+            return false;
+        }
+
+        if (!verifyFileExists(containerPath)) {
+            logger.logError("File does not exist: " + containerPath, null);
+            return false;
+        }
+    
+        String container = pathParts[0];
+        String remotePath = pathParts[1];
+    
+        try {
+            // First delete the file from the container
+            JSch jsch = new JSch();
+            Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect(5000);
+    
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect(5000);
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
+    
+            try {
+                sftpChannel.rm(remotePath);
+            } finally {
+                sftpChannel.exit();
+                sshSession.disconnect();
+            }
+    
+            // Then delete the metadata from the database
+            try (Connection conn = DBConnection.getMySQLConnection();
+                 PreparedStatement stmt = conn.prepareStatement("DELETE FROM Files WHERE id = ?")) {
+                stmt.setLong(1, fileId);
+                return stmt.executeUpdate() > 0;
+            }
+        } catch (Exception e) {
+            logger.logError("Failed to delete file", e);
+            return false;
+        }
+    }
     // Inner class for file permissions
     public static class FilePermission {
         private final boolean canRead;
