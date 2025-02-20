@@ -5,9 +5,10 @@ public class FileOperation {
     private final OperationType type;
     private final long timestamp;
     private final long size;
+    private String content; // Added to support WRITE operations
 
     public enum OperationType {
-        UPLOAD, DOWNLOAD, DELETE, READ  // Added READ operation type
+        UPLOAD, DOWNLOAD, DELETE, READ, WRITE  // Added WRITE operation type
     }
 
     public FileOperation(String filename, OperationType type, long size) {
@@ -15,6 +16,16 @@ public class FileOperation {
         this.type = type;
         this.timestamp = System.currentTimeMillis();
         this.size = size;
+    }
+
+    // Add setter and getter for content
+    public FileOperation setContent(String content) {
+        this.content = content;
+        return this;
+    }
+
+    public String getContent() {
+        return this.content;
     }
 
     public String getFilename() { return filename; }
@@ -33,7 +44,8 @@ public class FileOperation {
             case UPLOAD: baseTime = 1000; break;
             case DOWNLOAD: baseTime = 800; break;
             case DELETE: baseTime = 500; break;
-            case READ: baseTime = 300; break;  // Added processing time for READ
+            case READ: baseTime = 300; break;
+            case WRITE: baseTime = 600; break;  // Added processing time for WRITE
             default: baseTime = 1000;
         }
         return baseTime + (size / 1024 / 1024 * 100);

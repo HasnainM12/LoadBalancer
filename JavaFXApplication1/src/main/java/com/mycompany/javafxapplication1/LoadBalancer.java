@@ -127,6 +127,9 @@ public class LoadBalancer {
         if (taskData.has("filePath")) {
             fileOp.setFilePath(taskData.getString("filePath"));
         }
+        if (taskData.has("content")) {
+            fileOp.setContent(taskData.getString("content"));
+        }
     
         taskStates.put(taskId, TaskState.WAITING);
         taskTimestamps.put(taskId, System.currentTimeMillis());
@@ -147,6 +150,9 @@ public class LoadBalancer {
                     break;
                 case READ:
                     processFileRead(fileOp, taskId);
+                    break;
+                case WRITE:
+                    processFileWrite(fileOp, taskId);
                     break;
                 default:
                     logger.log(SystemLogger.LogLevel.ERROR, "Unknown operation: " + operation);
@@ -422,7 +428,86 @@ public class LoadBalancer {
             handleTaskError(taskId, e);
         }
     }
+
+    private void processFileWrite(FileOperation operation, String taskId) {
+        FileDB fileDB = new FileDB();
+        com.mycompany.javafxapplication1.Session userSession = com.mycompany.javafxapplication1.Session.getInstance();
+        
+        try {
+            // First validate session
+            if (!userSession.isValid()) {
+                throw new Exception("Invalid session or session expired");
+            }
     
+            // Get file ID and check existence
+            Long fileId = fileDB.getFileIdByFilename(operation.getFilename());
+            if (fileId == null) {
+                throw new Exception("File ID not found for filename: " + operation.getFilename());
+            }
+    
+            // Check write permissions for current user
+            FileDB.FilePermission permissions = fileDB.getFilePermissions(fileId, userSession.getUsername());
+            if (!permissions.canWrite()) {
+                throw new Exception("User does not have write permission for this file");
+            }
+    
+            String containerPath = fileDB.getFilePath(fileId);
+            if (containerPath == null) {
+                throw new Exception("File path not found: " + operation.getFilename());
+            }
+    
+            // Mark task as "PROCESSING"
+            taskStates.put(taskId, TaskState.PROCESSING);
+            mqttClient.publishTask("processing", taskId, "WRITE", operation.getFilename());
+    
+            String[] pathParts = containerPath.split(":");
+            if (pathParts.length != 2) {
+                throw new Exception("Invalid file path format");
+            }
+    
+            String container = pathParts[0];
+            String remotePath = pathParts[1];
+    
+            // Create a temporary file with the new content
+            File tempFile = File.createTempFile("write", ".tmp");
+            Files.write(tempFile.toPath(), operation.getContent().getBytes());
+    
+            // Upload the temporary file via SFTP
+            JSch jsch = new JSch();
+            com.jcraft.jsch.Session sshSession = jsch.getSession("ntu-user", container, 22);
+            sshSession.setPassword("ntu-user");
+            sshSession.setConfig("StrictHostKeyChecking", "no");
+            sshSession.connect(5000);
+    
+            Channel channel = sshSession.openChannel("sftp");
+            channel.connect(5000);
+            ChannelSftp sftpChannel = (ChannelSftp) channel;
+    
+            try {
+                // Upload the new content
+                sftpChannel.put(tempFile.getAbsolutePath(), remotePath);
+                
+                // Update session activity timestamp
+                userSession.updateLastActivity();
+                
+                taskStates.put(taskId, TaskState.COMPLETED);
+                mqttClient.publishTask("completed", taskId, "WRITE", operation.getFilename());
+                logger.log(SystemLogger.LogLevel.INFO, 
+                          "File successfully written: " + operation.getFilename() + 
+                          " by user: " + userSession.getUsername());
+            } finally {
+                sftpChannel.exit();
+                sshSession.disconnect();
+                tempFile.delete();  // Clean up temporary file
+            }
+    
+        } catch (Exception e) {
+            System.err.println("[ERROR] File write failed: " + e.getMessage());
+            taskStates.put(taskId, TaskState.ERROR);
+            mqttClient.publishTask("failed", taskId, "WRITE", operation.getFilename());
+            handleTaskError(taskId, e);
+        }
+    }
 
     private String getNextWorker() {
         List<String> healthyContainers = storageContainers.stream()

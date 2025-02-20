@@ -253,18 +253,6 @@ public class FileDB {
         }
     }
 
-    public boolean deleteFileMetadata(Long fileId) {
-        try (Connection conn = DBConnection.getMySQLConnection();
-             PreparedStatement stmt = conn.prepareStatement(
-                 "DELETE FROM Files WHERE id = ?")) {
-            stmt.setLong(1, fileId);
-            return stmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            System.err.println("[ERROR] Failed to delete file metadata: " + e.getMessage());
-            return false;
-        }
-    }
-
     public Long getFileIdByFilename(String filename) {
         try (Connection conn = DBConnection.getMySQLConnection();
              PreparedStatement stmt = conn.prepareStatement(
@@ -406,17 +394,14 @@ public class FileDB {
             logger.logError("Invalid file path format: " + containerPath, null);
             return false;
         }
-
-        if (!verifyFileExists(containerPath)) {
-            logger.logError("File does not exist: " + containerPath, null);
-            return false;
-        }
     
         String container = pathParts[0];
         String remotePath = pathParts[1];
+        boolean fileDeleted = false;
+        boolean metadataDeleted = false;
     
         try {
-            // First delete the file from the container
+            // First try to delete the file from container
             JSch jsch = new JSch();
             Session sshSession = jsch.getSession("ntu-user", container, 22);
             sshSession.setPassword("ntu-user");
@@ -428,20 +413,39 @@ public class FileDB {
             ChannelSftp sftpChannel = (ChannelSftp) channel;
     
             try {
+                // Try to delete the file
                 sftpChannel.rm(remotePath);
+                fileDeleted = true;
             } finally {
                 sftpChannel.exit();
                 sshSession.disconnect();
             }
     
-            // Then delete the metadata from the database
-            try (Connection conn = DBConnection.getMySQLConnection();
-                 PreparedStatement stmt = conn.prepareStatement("DELETE FROM Files WHERE id = ?")) {
-                stmt.setLong(1, fileId);
-                return stmt.executeUpdate() > 0;
+            // If file deletion was successful, delete from database
+            if (fileDeleted) {
+                try (Connection conn = DBConnection.getMySQLConnection()) {
+                    // First delete file permissions
+                    try (PreparedStatement permStmt = conn.prepareStatement("DELETE FROM FilePermissions WHERE file_id = ?")) {
+                        permStmt.setLong(1, fileId);
+                        permStmt.executeUpdate();
+                    }
+    
+                    // Then delete the file record
+                    try (PreparedStatement fileStmt = conn.prepareStatement("DELETE FROM Files WHERE id = ?")) {
+                        fileStmt.setLong(1, fileId);
+                        metadataDeleted = fileStmt.executeUpdate() > 0;
+                    }
+                }
             }
+    
+            return fileDeleted && metadataDeleted;
+    
         } catch (Exception e) {
             logger.logError("Failed to delete file", e);
+            // If we deleted the file but failed to update DB, log this serious inconsistency
+            if (fileDeleted && !metadataDeleted) {
+                logger.logError("CRITICAL: File deleted from container but database cleanup failed. File ID: " + fileId, e);
+            }
             return false;
         }
     }
