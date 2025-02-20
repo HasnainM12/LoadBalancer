@@ -17,14 +17,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.json.JSONObject;
 import javafx.concurrent.Task;
-
 import javafx.event.ActionEvent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
-
+import java.util.List;
 
 
 public class SecondaryController {
@@ -69,132 +68,138 @@ public class SecondaryController {
         }
     }
 
+    private void uploadSingleFile(File file) {
+        try {
+            String taskId = UUID.randomUUID().toString();
+            
+            // Create progress dialog with the existing constructor
+            ProgressDialog progressDialog = new ProgressDialog("Uploading");
+            
+            // Make it non-modal and set custom title
+            progressDialog.setNonModal();
+            progressDialog.setTitle("Uploading: " + file.getName());
+            
+            progressDialog.trackProgress(taskId);
+            progressDialog.setAutoClose(true);
+            
+            // Prepare JSON with all required fields including filePath
+            JSONObject taskData = new JSONObject();
+            taskData.put("taskId", taskId);
+            taskData.put("operation", "UPLOAD");
+            taskData.put("filename", file.getName());
+            taskData.put("size", file.length());
+            taskData.put("filePath", file.getAbsolutePath());
+            
+            // Submit the task in a background thread
+            Task<Void> uploadTask = new Task<Void>() {
+                @Override
+                protected Void call() throws Exception {
+                    LoadBalancer.getInstance().submitTask(taskData);
+                    return null;
+                }
+            };
+            
+            // Handle failure if the task encounters an error
+            uploadTask.setOnFailed(e -> {
+                Throwable ex = uploadTask.getException();
+                showError("Upload error: " + ex.getMessage());
+            });
+            
+            // Show the progress dialog and start the task
+            progressDialog.show();
+            new Thread(uploadTask).start();
+        } catch (Exception e) {
+            showError("Upload error: " + e.getMessage());
+        }
+    }
+    
     @FXML
     private void handleUpload() {
         FileChooser fileChooser = new FileChooser();
-        File file = fileChooser.showOpenDialog(null);
+        fileChooser.setTitle("Select Files to Upload");
+        List<File> files = fileChooser.showOpenMultipleDialog(null);
     
-        if (file != null) {
-            try {
-                String taskId = UUID.randomUUID().toString();
+        if (files != null && !files.isEmpty()) {
+            for (File file : files) {
+                try {
+                    String taskId = UUID.randomUUID().toString();
     
-                ProgressDialog progressDialog = new ProgressDialog("Uploading File");
-                progressDialog.trackProgress(taskId);
+                    // Create non-modal progress dialog with file name in title
+                    ProgressDialog progressDialog = new ProgressDialog("Uploading File");
+                    progressDialog.setNonModal(); // Make dialog non-modal
+                    progressDialog.setTitle("Uploading: " + file.getName());
+                    progressDialog.trackProgress(taskId);
+                    progressDialog.setAutoClose(true);
     
-                // Create FileOperation with the file path
-                FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
-                        .setFilePath(file.getAbsolutePath());
+                    // Create FileOperation with the file path
+                    FileOperation operation = new FileOperation(file.getName(), FileOperation.OperationType.UPLOAD, file.length())
+                            .setFilePath(file.getAbsolutePath());
     
-                // Prepare JSON with all required fields including filePath
-                JSONObject taskData = new JSONObject();
-                taskData.put("taskId", taskId);
-                taskData.put("operation", "UPLOAD");
-                taskData.put("filename", file.getName());
-                taskData.put("size", file.length());
-                taskData.put("filePath", file.getAbsolutePath());
+                    // Prepare JSON with all required fields including filePath
+                    JSONObject taskData = new JSONObject();
+                    taskData.put("taskId", taskId);
+                    taskData.put("operation", "UPLOAD");
+                    taskData.put("filename", file.getName());
+                    taskData.put("size", file.length());
+                    taskData.put("filePath", file.getAbsolutePath());
     
-                // Offload the upload process to a background thread using a Task
-                Task<Void> uploadTask = new Task<Void>() {
-                    @Override
-                    protected Void call() throws Exception {
-                        LoadBalancer.getInstance().submitTask(taskData);
-                        return null;
-                    }
-                };
+                    // Offload the upload process to a background thread using a Task
+                    Task<Void> uploadTask = new Task<Void>() {
+                        @Override
+                        protected Void call() throws Exception {
+                            LoadBalancer.getInstance().submitTask(taskData);
+                            return null;
+                        }
+                    };
     
-                // Handle failure if the task encounters an error
-                uploadTask.setOnFailed(e -> {
-                    Throwable ex = uploadTask.getException();
-                    showError("Upload error: " + ex.getMessage());
-                });
+                    // Handle failure if the task encounters an error
+                    uploadTask.setOnFailed(e -> {
+                        Throwable ex = uploadTask.getException();
+                        showError("Upload error: " + ex.getMessage());
+                    });
     
-                // Display the progress dialog immediately and then start the task
-                progressDialog.show();
-                new Thread(uploadTask).start();
-            } catch (Exception e) {
-                showError("Upload error: " + e.getMessage());
+                    // Display the progress dialog immediately and then start the task
+                    progressDialog.show();
+                    new Thread(uploadTask).start();
+                } catch (Exception e) {
+                    showError("Upload error: " + e.getMessage());
+                }
             }
         }
     }
      
-        
     @FXML
     private void handleDownload() {
-        UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
-        if (selectedFile == null) {
-            showError("Please select a file to download");
+        ObservableList<UserFile> selectedFiles = fileTableView.getSelectionModel().getSelectedItems();
+        if (selectedFiles == null || selectedFiles.isEmpty()) {
+            showError("Please select file(s) to download");
             return;
         }
 
-        // Check permissions before downloading
-        FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
-        if (!permissions.canRead()) {
-            showError("You don't have permission to download this file.");
-            return;
-        }
-
-        String taskId = UUID.randomUUID().toString();
-        ProgressDialog progressDialog = new ProgressDialog("Downloading File");
-        progressDialog.trackProgress(taskId);
-        progressDialog.setAutoClose(true);
-
-        // Prepare JSON with required fields for download
-        JSONObject taskData = new JSONObject();
-        taskData.put("taskId", taskId);
-        taskData.put("operation", "DOWNLOAD");
-        taskData.put("filename", selectedFile.getFilename());
-        taskData.put("fileId", selectedFile.getId());
-
-        // Offload the download process to a background thread using a Task
-        Task<Void> downloadTask = new Task<Void>() {
-            @Override
-            protected Void call() throws Exception {
-                LoadBalancer.getInstance().submitTask(taskData);
-                return null;
+        for (UserFile selectedFile : selectedFiles) {
+            // Check permissions before downloading
+            FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
+            if (!permissions.canRead()) {
+                showError("You don't have permission to download " + selectedFile.getFilename());
+                continue; // Skip this file, continue with others
             }
-        };
 
-        downloadTask.setOnFailed(e -> {
-            Throwable ex = downloadTask.getException();
-            showError("Download error: " + ex.getMessage());
-        });
-
-        // Show the progress dialog immediately and then start the task
-        progressDialog.show();
-        new Thread(downloadTask).start();
-
-    }
-
-    @FXML
-    private void handleDelete() {
-        UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
-        if (selectedFile == null) {
-            showError("Please select a file to delete");
-            return;
-        }
-
-        // Check permissions before deleting
-        FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
-        if (!permissions.canWrite()) {
-            showError("You don't have permission to delete this file.");
-            return;
-        }
-
-        Optional<ButtonType> result = showConfirmation("Delete File", "Are you sure you want to delete " + selectedFile.getFilename() + "?");
-        if (result.isPresent() && result.get() == ButtonType.OK) {
             String taskId = UUID.randomUUID().toString();
-            ProgressDialog progressDialog = new ProgressDialog("Deleting File");
+            ProgressDialog progressDialog = new ProgressDialog("Downloading File");
+            progressDialog.setNonModal(); // Make dialog non-modal
+            progressDialog.setTitle("Downloading: " + selectedFile.getFilename());
             progressDialog.trackProgress(taskId);
             progressDialog.setAutoClose(true);
 
+            // Prepare JSON with required fields for download
             JSONObject taskData = new JSONObject();
             taskData.put("taskId", taskId);
-            taskData.put("operation", "DELETE");
+            taskData.put("operation", "DOWNLOAD");
             taskData.put("filename", selectedFile.getFilename());
             taskData.put("fileId", selectedFile.getId());
 
-            // Offload the delete process to a background thread using a Task
-            Task<Void> deleteTask = new Task<Void>() {
+            // Offload the download process to a background thread using a Task
+            Task<Void> downloadTask = new Task<Void>() {
                 @Override
                 protected Void call() throws Exception {
                     LoadBalancer.getInstance().submitTask(taskData);
@@ -202,17 +207,77 @@ public class SecondaryController {
                 }
             };
 
-            deleteTask.setOnFailed(e -> {
-                Throwable ex = deleteTask.getException();
-                showError("Delete error: " + ex.getMessage());
+            downloadTask.setOnFailed(e -> {
+                Throwable ex = downloadTask.getException();
+                showError("Download error: " + ex.getMessage());
             });
 
+            // Show the progress dialog immediately and then start the task
             progressDialog.show();
-            new Thread(deleteTask).start();
-
+            new Thread(downloadTask).start();
         }
     }
 
+    @FXML
+    private void handleDelete() {
+        ObservableList<UserFile> selectedFiles = fileTableView.getSelectionModel().getSelectedItems();
+        if (selectedFiles == null || selectedFiles.isEmpty()) {
+            showError("Please select file(s) to delete");
+            return;
+        }
+
+        String confirmMessage = selectedFiles.size() == 1 
+            ? "Are you sure you want to delete " + selectedFiles.get(0).getFilename() + "?"
+            : "Are you sure you want to delete these " + selectedFiles.size() + " files?";
+            
+        Optional<ButtonType> result = showConfirmation("Delete File(s)", confirmMessage);
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            for (UserFile selectedFile : selectedFiles) {
+                // Check permissions before deleting
+                FileDB.FilePermission permissions = fileDB.getFilePermissions(selectedFile.getId(), session.getUsername());
+                if (!permissions.canWrite()) {
+                    showError("You don't have permission to delete " + selectedFile.getFilename());
+                    continue; // Skip this file, continue with others
+                }
+
+                String taskId = UUID.randomUUID().toString();
+                
+                // Create dialog with the existing constructor
+                ProgressDialog progressDialog = new ProgressDialog("Deleting File");
+                
+                // Make it non-modal and set custom title
+                progressDialog.setNonModal();
+                progressDialog.setTitle("Deleting: " + selectedFile.getFilename());
+                
+                progressDialog.trackProgress(taskId);
+                progressDialog.setAutoClose(true);
+
+                JSONObject taskData = new JSONObject();
+                taskData.put("taskId", taskId);
+                taskData.put("operation", "DELETE");
+                taskData.put("filename", selectedFile.getFilename());
+                taskData.put("fileId", selectedFile.getId());
+
+                // Offload the delete process to a background thread using a Task
+                Task<Void> deleteTask = new Task<Void>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        LoadBalancer.getInstance().submitTask(taskData);
+                        return null;
+                    }
+                };
+
+                deleteTask.setOnFailed(e -> {
+                    Throwable ex = deleteTask.getException();
+                    showError("Delete error: " + ex.getMessage());
+                });
+
+                progressDialog.show();
+                new Thread(deleteTask).start();
+            }
+        }
+    }
+        
     @FXML
     private void handleEditFile() {
         UserFile selectedFile = fileTableView.getSelectionModel().getSelectedItem();
@@ -410,6 +475,9 @@ public class SecondaryController {
 
     private void setupFileTable() {
         fileTableView.getColumns().clear();
+        
+        // Enable multiple selection
+        fileTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         
         TableColumn<UserFile, Long> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("id"));

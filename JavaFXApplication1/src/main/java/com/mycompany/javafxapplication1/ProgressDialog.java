@@ -22,25 +22,30 @@ public class ProgressDialog extends Dialog<Void> {
     private MQTTClient mqttClient;
     private String taskId;
     private boolean autoClose = false;
+    private String operationId;
 
     public ProgressDialog(String operation) {
         setTitle("Operation in Progress");
-        initModality(Modality.APPLICATION_MODAL);
-        
+        initModality(Modality.NONE);  // Make non-modal by default
+       
         progressBar = new ProgressBar(0);
         progressBar.setPrefWidth(300);
-        
+       
         statusText = new Text("Initializing " + operation);
-        
+       
         VBox content = new VBox(10);
         content.getChildren().addAll(statusText, progressBar);
         getDialogPane().setContent(content);
-        
+       
         getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
         closeButton = getDialogPane().lookupButton(ButtonType.CANCEL);
         closeButton.setDisable(true);
-
         mqttClient = new MQTTClient("ProgressDialog-" + UUID.randomUUID().toString());
+    }
+
+    
+    public void setNonModal() {
+        initModality(Modality.NONE);
     }
 
     public void trackProgress(String taskId) {
