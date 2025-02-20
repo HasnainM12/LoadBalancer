@@ -52,7 +52,7 @@ public class LoadBalancer {
    private static final int MAX_CONTAINER_LOAD = 100;
    private static final int TASK_TIMEOUT_SECONDS = 60;
    private static final int HEALTH_CHECK_INTERVAL = 30; // Check every 30 seconds
-   private static final int MONITORING_INTERVAL = 10; // Adjust as needed
+   private static final int MONITORING_INTERVAL = 10;
 
 
  
@@ -558,14 +558,14 @@ public class LoadBalancer {
     private String getLeastLoadedWorker(List<String> healthyContainers) {
         return healthyContainers.stream()
             .min(Comparator.comparingInt(containerLoad::get))
-            .orElse(null); // ✅ Now returns `null` if no workers are available
+            .orElse(null); // Now returns `null` if no workers are available
     }
     
     
     private synchronized String getNextRoundRobinWorker(List<String> healthyContainers) {
-        if (healthyContainers.isEmpty()) return null; // ✅ Return `null` if no workers
+        if (healthyContainers.isEmpty()) return null; //  Return `null` if no workers
     
-        if (roundRobinIndex >= healthyContainers.size()) { // ✅ Reset if index is out of bounds
+        if (roundRobinIndex >= healthyContainers.size()) { //  Reset if index is out of bounds
             roundRobinIndex = 0;
         }
     

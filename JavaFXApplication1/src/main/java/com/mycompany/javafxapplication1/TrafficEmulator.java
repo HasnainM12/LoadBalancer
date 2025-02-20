@@ -61,7 +61,7 @@ public class TrafficEmulator {
 
         if (taskStates.containsKey(taskId)) {
             System.out.println("[DEBUG] Task " + taskId + " is already queued.");
-            return; // ✅ Prevent duplicate processing
+            return; 
         }
 
         taskStates.put(taskId, TaskState.QUEUED);

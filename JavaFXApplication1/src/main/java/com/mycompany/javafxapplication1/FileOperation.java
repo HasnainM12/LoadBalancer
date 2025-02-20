@@ -5,10 +5,10 @@ public class FileOperation {
     private final OperationType type;
     private final long timestamp;
     private final long size;
-    private String content; // Added to support WRITE operations
+    private String content;
 
     public enum OperationType {
-        UPLOAD, DOWNLOAD, DELETE, READ, WRITE  // Added WRITE operation type
+        UPLOAD, DOWNLOAD, DELETE, READ, WRITE  
     }
 
     public FileOperation(String filename, OperationType type, long size) {
@@ -28,15 +28,24 @@ public class FileOperation {
         return this.content;
     }
 
-    public String getFilename() { return filename; }
-    public OperationType getType() { return type; }
-    public long getTimestamp() { return timestamp; }
+    public String getFilename() { 
+        return filename; 
+    }
+    public OperationType getType() { 
+        return type; 
+    }
+    public long getTimestamp() { 
+        return timestamp; 
+    }
+
     private String filePath;
     public FileOperation setFilePath(String path) { 
         this.filePath = path;
         return this;
     }
-    public String getFilePath() { return this.filePath; }
+    public String getFilePath() {
+        return this.filePath; 
+    }
 
     public long getEstimatedProcessingTime() {
         long baseTime;

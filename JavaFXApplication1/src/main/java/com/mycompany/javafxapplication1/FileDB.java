@@ -105,9 +105,7 @@ public class FileDB {
                     String filename = rs.getString("filename");
                     String owner = rs.getString("owner");
                     String path = rs.getString("path");
-                    
-                    // Check if file exists in container via SSH
-                    // Check if file exists in container via SSH
+
                     String[] pathParts = path.split(":");
                     if (pathParts.length == 2) {
                         String container = pathParts[0];

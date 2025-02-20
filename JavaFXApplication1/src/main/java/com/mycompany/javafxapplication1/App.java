@@ -75,7 +75,7 @@ public class App extends Application {
             // Ensure SQLite tables exist
             System.out.println("[INFO] Ensuring SQLite tables exist...");
             sqliteConn = DBConnection.getSQLiteConnection();
-            sessionDB.createSessionTable();  // ✅ Ensures Sessions table exists
+            sessionDB.createSessionTable();  //  Ensures Sessions table exists
             System.out.println("[INFO] SQLite session table checked/created.");
     
             // Initialise storage containers in database
