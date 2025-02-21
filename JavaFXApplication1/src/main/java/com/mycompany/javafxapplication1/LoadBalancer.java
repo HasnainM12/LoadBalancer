@@ -42,6 +42,7 @@ public class LoadBalancer {
     private final Map<String, TaskState> taskStates = new ConcurrentHashMap<>();
     private final Map<String, Long> taskTimestamps = new ConcurrentHashMap<>();
     private final Map<String, Long> taskProcessingTimestamps = new ConcurrentHashMap<>();
+    private final Map<String, String> taskToContainerMap = new ConcurrentHashMap<>();
 
     
     // Container management  
@@ -187,29 +188,42 @@ public class LoadBalancer {
         }
     }
      
-
-     public void handleTaskCompletion(String taskId) {
+    public void handleTaskCompletion(String taskId) {
+        // Remove task tracking info
         taskStates.remove(taskId);
         taskTimestamps.remove(taskId);
-        TaskState state = taskStates.remove(taskId);
-
-        String container = taskProcessingTimestamps.get(taskId) != null ? 
-        taskProcessingTimestamps.get(taskId).toString() : null;
+        
+        // Get the container that was processing this task
+        String container = taskToContainerMap.remove(taskId);
+        
         if (container != null) {
-            workerLoad.put(container,Math.max(0, workerLoad.getOrDefault(container, 1)-1));
+            // Properly decrement the load counter for this container
+            workerLoad.computeIfPresent(container, (k, v) -> Math.max(0, v - 1));
+            logger.log(SystemLogger.LogLevel.INFO, "Task completed: " + taskId + " on container: " + container);
+        } else {
+            logger.log(SystemLogger.LogLevel.INFO, "Task completed: " + taskId);
         }
-        logger.log(SystemLogger.LogLevel.INFO, "Task completed: " + taskId);
-     }
+        
+        // Clean up any timestamp information
+        taskProcessingTimestamps.remove(taskId);
+    }
      
-     public void handleTaskError(String taskId, Exception error) {
+    public void handleTaskError(String taskId, Exception error) {
         taskStates.put(taskId, TaskState.ERROR);
         logger.log(SystemLogger.LogLevel.ERROR, "Task failed: " + taskId + " - " + error.getMessage());
+        
+        // Get and remove container for this task
+        String container = taskToContainerMap.remove(taskId);
+        if (container != null) {
+            // Decrement the worker load
+            workerLoad.computeIfPresent(container, (k, v) -> Math.max(0, v - 1));
+        }
         
         try {
             JSONObject errorMsg = new JSONObject()
                 .put("taskId", taskId)
                 .put("error", error.getMessage());
-                mqttClient.publish("task/error", errorMsg); 
+            mqttClient.publish("task/error", errorMsg);
         } catch (Exception e) {
             logger.log(SystemLogger.LogLevel.ERROR, "Failed to publish error: " + e.getMessage());
         }
@@ -326,7 +340,7 @@ public class LoadBalancer {
             mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
             return;
         }
-
+        taskToContainerMap.put(taskId, container);
         workerLoad.put(container, workerLoad.getOrDefault(container, 0) + 1);
         long delay = calculateDelay(operation.getType());
         taskProcessingTimestamps.put(taskId, System.currentTimeMillis() + delay);
@@ -530,7 +544,7 @@ public class LoadBalancer {
                 return getLeastLoadedWorker(healthyContainers); // Uses least loaded worker
     
             case ROUND_ROBIN:
-                return getNextRoundRobinWorker(healthyContainers); // Uses round-robin
+                return getNextRoundRobinContainer(); // Uses round-robin
     
             default:
                 logger.log(SystemLogger.LogLevel.WARN, "Unknown scheduling algorithm, defaulting to FCFS");
@@ -565,20 +579,7 @@ public class LoadBalancer {
             .orElse(null);
     }
     
-    
-    
-    private synchronized String getNextRoundRobinWorker(List<String> healthyContainers) {
-        if (healthyContainers.isEmpty()) return null; //  Return `null` if no workers
-    
-        if (roundRobinIndex >= healthyContainers.size()) { //  Reset if index is out of bounds
-            roundRobinIndex = 0;
-        }
-    
-        String worker = healthyContainers.get(roundRobinIndex);
-        roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
-        return worker;
-    }
-    
+
     
     public void handleMessage(String topic, String message) {
         switch (topic) {
@@ -794,15 +795,18 @@ public class LoadBalancer {
         logger.log(SystemLogger.LogLevel.INFO, "Container " + container + " selected for operation: " + operation.getType());
         
         try (Connection conn = DBConnection.getMySQLConnection()) {
+            // Increment the load for this container
+            workerLoad.put(container, workerLoad.getOrDefault(container, 0) + 1);
+            
             Thread.sleep(operation.getEstimatedProcessingTime());
             loadBalancerDB.logOperation(container, operation.getType().name(), conn);
-            containerLoad.compute(container, (k, v) -> v + 1);
             return container;
         } catch (Exception e) {
             logger.log(SystemLogger.LogLevel.ERROR, "Operation processing failed: " + e.getMessage());
             throw new RuntimeException("Operation processing failed", e);
         } finally {
-            containerLoad.compute(container, (k, v) -> v - 1);
+            // Decrement the load when operation completes or fails
+            workerLoad.computeIfPresent(container, (k, v) -> Math.max(0, v - 1));
         }
     }
 
@@ -810,7 +814,16 @@ public class LoadBalancer {
         if (storageContainers.isEmpty()) {
             throw new IllegalStateException("No storage containers available");
         }
-
+    
+        List<String> healthyContainers = storageContainers.stream()
+            .filter(container -> containerHealth.getOrDefault(container, false))
+            .collect(Collectors.toList());
+            
+        if (healthyContainers.isEmpty()) {
+            logger.log(SystemLogger.LogLevel.WARN, "No healthy containers available, using first container");
+            return storageContainers.get(0);
+        }
+    
         switch (schedulingAlgorithm) {
             case FCFS:
                 return getFirstAvailableContainer();
@@ -829,15 +842,30 @@ public class LoadBalancer {
 
     private String getLeastLoadedContainer() {
         return storageContainers.stream()
-            .min(Comparator.comparingInt(containerLoad::get))
+            .filter(container -> containerHealth.getOrDefault(container, false))
+            .min(Comparator.comparingInt(container -> 
+                workerLoad.getOrDefault(container, 0)))
             .orElse(storageContainers.get(0));
     }
 
-    private int rrIndex = 0;
-    
+
     private synchronized String getNextRoundRobinContainer() {
-        String container = storageContainers.get(rrIndex);
-        rrIndex = (rrIndex + 1) % storageContainers.size();
+        List<String> healthyContainers = storageContainers.stream()
+            .filter(container -> containerHealth.getOrDefault(container, false))
+            .collect(Collectors.toList());
+            
+        if (healthyContainers.isEmpty()) {
+            logger.log(SystemLogger.LogLevel.WARN, "No healthy containers available, using first container");
+            return storageContainers.get(0);
+        }
+        
+        // Reset index if it's out of bounds
+        if (roundRobinIndex >= healthyContainers.size()) {
+            roundRobinIndex = 0;
+        }
+        
+        String container = healthyContainers.get(roundRobinIndex);
+        roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
         return container;
     }
 
