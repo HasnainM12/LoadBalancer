@@ -192,9 +192,11 @@ public class LoadBalancer {
         taskStates.remove(taskId);
         taskTimestamps.remove(taskId);
         TaskState state = taskStates.remove(taskId);
-        String container = (state != null) ? state.name() : null;
+
+        String container = taskProcessingTimestamps.get(taskId) != null ? 
+        taskProcessingTimestamps.get(taskId).toString() : null;
         if (container != null) {
-            containerLoad.computeIfPresent(container, (k, v) -> v - 1);
+            workerLoad.put(container,Math.max(0, workerLoad.getOrDefault(container, 1)-1));
         }
         logger.log(SystemLogger.LogLevel.INFO, "Task completed: " + taskId);
      }
@@ -324,7 +326,8 @@ public class LoadBalancer {
             mqttClient.publishTask("failed", taskId, "UPLOAD", operation.getFilename());
             return;
         }
-    
+
+        workerLoad.put(container, workerLoad.getOrDefault(container, 0) + 1);
         long delay = calculateDelay(operation.getType());
         taskProcessingTimestamps.put(taskId, System.currentTimeMillis() + delay);
     
@@ -557,9 +560,11 @@ public class LoadBalancer {
     
     private String getLeastLoadedWorker(List<String> healthyContainers) {
         return healthyContainers.stream()
-            .min(Comparator.comparingInt(containerLoad::get))
-            .orElse(null); // Now returns `null` if no workers are available
+            .min(Comparator.comparingInt(container -> 
+                workerLoad.getOrDefault(container, 0))) // Use workerLoad, not just containerLoad
+            .orElse(null);
     }
+    
     
     
     private synchronized String getNextRoundRobinWorker(List<String> healthyContainers) {
