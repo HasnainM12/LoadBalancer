@@ -267,7 +267,7 @@ public class LoadBalancer {
     }
 
     private long calculateDelay(FileOperation.OperationType operationType) {
-        // Base delay between 30-90 seconds as per requirement
+        // Base delay between 30-90 seconds
         int baseDelay = 30;
         int variableDelay = new Random().nextInt(61); // 0-60 additional seconds
         return (baseDelay + variableDelay) * 1000L; // Convert to milliseconds
@@ -451,7 +451,9 @@ public class LoadBalancer {
         com.mycompany.javafxapplication1.Session userSession = com.mycompany.javafxapplication1.Session.getInstance();
         
         try {
-            // First validate session
+            // Update session activity timestamp to prevent expiration
+            userSession.updateLastActivity();
+            // validate session
             if (!userSession.isValid()) {
                 throw new Exception("Invalid session or session expired");
             }

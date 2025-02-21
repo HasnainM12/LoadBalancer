@@ -74,6 +74,22 @@ public class FileEditorController {
             progressDialog.trackProgress(taskId);
             progressDialog.setAutoClose(true);
             
+            // Subscribe to MQTT topic for completed task
+            mqttClient.subscribe("+", (topic, message) -> {
+                JSONObject payload = new JSONObject(new String(message.getPayload()));
+                if (payload.getString("taskId").equals(taskId) && topic.endsWith("completed")) {
+                    // Once task is completed, fetch and display content
+                    Platform.runLater(() -> {
+                        String content = fileDB.getFileContent(path);
+                        if (content != null) {
+                            contentArea.setText(content);
+                        } else {
+                            showError("Failed to load file content");
+                        }
+                    });
+                }
+            });
+            
             JSONObject taskData = new JSONObject()
                 .put("taskId", taskId)
                 .put("operation", "READ")
@@ -92,6 +108,9 @@ public class FileEditorController {
     @FXML
     private void handleSave() {
         try {
+            // Update session activity timestamp
+            Session.getInstance().updateLastActivity();
+            
             FileDB.FilePermission permissions = fileDB.getFilePermissions(fileId, Session.getInstance().getUsername());
             if (!permissions.canWrite()) {
                 showError("You don't have permission to edit this file.");
